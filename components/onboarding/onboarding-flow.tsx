@@ -31,6 +31,7 @@ import { useAccount, type Gender, type Goal, type OnboardingData } from "@/lib/a
 import { useSync } from "@/lib/sync"
 import { useFoodLog } from "@/lib/food-log"
 import { useSmartNotifications } from "@/lib/notifications"
+import { InstallGuide } from "@/components/install-guide"
 import { cn } from "@/lib/utils"
 
 const STEPS = 11 // 0..10
@@ -406,10 +407,17 @@ function NotificationsStep({ onEnter, name }: { onEnter: () => void; name: strin
           {busy ? "Asking…" : "🔔 Allow notifications"}
         </button>
       )}
+      {/* Last onboarding step: show how to install Sahtek as a real app (PWA). */}
+      <div className="mt-6">
+        <p className="mb-2 text-center text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+          One more thing — put Sahtek on your home screen
+        </p>
+        <InstallGuide />
+      </div>
       <button
         type="button"
         onClick={onEnter}
-        className="mt-3 w-full py-3 text-center text-sm font-bold text-muted-foreground"
+        className="mt-4 w-full py-3 text-center text-sm font-bold text-muted-foreground"
       >
         {granted || permission === "denied" ? "Enter my dashboard →" : "Maybe later — enter dashboard →"}
       </button>
