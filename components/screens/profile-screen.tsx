@@ -17,6 +17,7 @@ import {
 import { usePremium, FREE_SCANS_PER_DAY } from "@/lib/premium"
 import { useTheme } from "@/lib/use-theme"
 import { useAccount, initialsOf } from "@/lib/account"
+import { InstallGuide } from "@/components/install-guide"
 import { cn } from "@/lib/utils"
 
 const goalLabels = { lose: "Lose weight", maintain: "Maintain", gain: "Gain muscle" } as const
@@ -130,6 +131,9 @@ export function ProfileScreen({
           </div>
         </section>
       )}
+
+      {/* Install as an app — platform-aware PWA tutorial */}
+      <InstallGuide />
 
       {/* Tools */}
       <Section title="Tools">
