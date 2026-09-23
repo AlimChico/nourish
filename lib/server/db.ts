@@ -108,6 +108,7 @@ async function makePostgres(url: string) {
   )`
   await sql`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_scans_user_date ON scans(user_id, date)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_events_user_date ON events(user_id, date)`
   return sql
 }
 
@@ -426,7 +427,26 @@ function hashToken(token: string): string {
 export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30 // 30 days
 export const SESSION_COOKIE = "nourish_session"
 
+/** Delete expired sessions so the table stays bounded (runs on each new login). */
+export async function purgeExpiredSessions(): Promise<void> {
+  const now = Date.now()
+  try {
+    if (usingPostgres) await sql`DELETE FROM sessions WHERE expires_at < ${now}`
+    else sqlite!.prepare("DELETE FROM sessions WHERE expires_at < ?").run(now)
+  } catch {
+    // non-fatal housekeeping
+  }
+}
+
+/** Timing-safe string comparison (hashes first so lengths never leak). */
+export function safeEqualStrings(a: string, b: string): boolean {
+  const ha = createHash("sha256").update(a).digest()
+  const hb = createHash("sha256").update(b).digest()
+  return timingSafeEqual(ha, hb)
+}
+
 export async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
+  await purgeExpiredSessions()
   const token = randomBytes(32).toString("base64url")
   const expiresAt = Date.now() + SESSION_TTL_MS
   await db.insertSession(hashToken(token), userId, expiresAt)
