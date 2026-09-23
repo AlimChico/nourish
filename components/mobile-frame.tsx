@@ -10,14 +10,15 @@ export function MobileFrame({ children, className }: { children: React.ReactNode
   return (
     <div className="flex min-h-dvh justify-center aurora-bg">        <div
         className={cn(
-          // Phone: locked to viewport height, rounded screen edges even without notch
+          // Phone: locked to viewport height — full-bleed at the top, slight
+          // rounding at the bottom only (no dark wedges around the notch area)
           "relative flex h-dvh w-full flex-col overflow-hidden bg-background",
-          "rounded-[1.9rem]",
+          "rounded-b-[1.4rem]",
           // Tablet portrait / landscape: floating rounded card
           "sm:my-auto sm:h-[92dvh] sm:max-h-[1000px] sm:w-[640px] sm:items-stretch",
           "lg:w-[960px]",
-          "sm:rounded-[2.5rem] sm:border-8 sm:border-[#0a3d2e]",
-          "sm:shadow-[0_0_90px_rgba(52,211,153,0.16),0_25px_60px_rgba(0,0,0,0.55)]",
+          "sm:rounded-[2.5rem]",
+          "sm:shadow-[0_25px_60px_rgba(0,0,0,0.55)]",
           className,
         )}
         style={{ WebkitTapHighlightColor: "transparent" }}

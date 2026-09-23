@@ -15,10 +15,10 @@ const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
 
 export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab: TabKey) => void }) {
   return (
-    <div className="pointer-events-none sticky bottom-0 z-30 w-full px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2">
+    <div className="pointer-events-none sticky bottom-0 z-30 w-full px-3 pb-[calc(env(safe-area-inset-bottom)+18px)] pt-2">
       <nav
         aria-label="Main navigation"
-        className="pointer-events-auto mx-auto flex w-full max-w-md items-stretch rounded-[1.65rem] border border-[#a7f3d0]/12 bg-[#0d1813]/92 shadow-[0_14px_44px_rgba(0,0,0,0.55),0_2px_0_rgba(167,243,208,0.06)_inset,0_0_28px_rgba(52,211,153,0.09)] backdrop-blur-xl"
+        className="pointer-events-auto mx-auto flex w-full max-w-md items-stretch rounded-[1.65rem] bg-[#0d1813]/92 shadow-[0_14px_44px_rgba(0,0,0,0.55)] backdrop-blur-xl"
       >
         {tabs.map((t) => {
           const Icon = t.icon
