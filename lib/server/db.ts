@@ -106,19 +106,17 @@ async function makePostgres(url: string) {
   return sql
 }
 
-let pg: PostgresClient | null = null
-if (usingPostgres) {
-  // Initialized lazily on first request to avoid top-level await issues.
-  let pgPromise: Promise<PostgresClient> | null = null
-  const ensurePg = () => (pgPromise ??= makePostgres(DATABASE_URL))
-  pg = new Proxy({} as PostgresClient, {
-    get(_t, prop) {
-      return (...args: unknown[]) =>
-        ensurePg().then((client) =>
-          (client as unknown as Record<string, (...a: unknown[]) => unknown>)[prop as string](...args),
-        )
-    },
-  }) as PostgresClient
+let pgClient: PostgresClient | null = null
+let pgInitPromise: Promise<PostgresClient> | null = null
+async function ensurePg(): Promise<PostgresClient> {
+  if (!pgClient) pgClient = await (pgInitPromise ??= makePostgres(DATABASE_URL))
+  return pgClient
+}
+
+/** Tagged-template wrapper: awaits the lazy client, then runs the query. */
+async function sql<T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> {
+  const client = await ensurePg()
+  return (client as unknown as (s: TemplateStringsArray, ...v: unknown[]) => Promise<T[]>)(strings, ...values)
 }
 
 // ---------------------------------------------------------------------------
@@ -126,7 +124,7 @@ if (usingPostgres) {
 // ---------------------------------------------------------------------------
 
 let sqlite: DatabaseSync | null = null
-if (!pg) {
+if (!usingPostgres) {
   // /tmp is writable even on read-only hosts (Vercel, some containers).
   const dir = process.env.NOURISH_DB_DIR || (fs.existsSync(process.cwd()) && canWrite(process.cwd()) ? path.join(process.cwd(), ".data") : "/tmp/nourish-data")
   try {
@@ -189,8 +187,8 @@ function canWrite(dir: string): boolean {
 
 export const db = {
   async findUserByEmail(email: string): Promise<{ id: string; email: string; name: string; password: string } | null> {
-    if (pg) {
-      const rows = (await pg`SELECT id, email, name, password FROM users WHERE email = ${email} LIMIT 1`) as unknown as {
+    if (usingPostgres) {
+      const rows = (await sql`SELECT id, email, name, password FROM users WHERE email = ${email} LIMIT 1`) as unknown as {
         id: string
         email: string
         name: string
@@ -206,24 +204,24 @@ export const db = {
 
   async insertUser(id: string, email: string, name: string, passwordHash: string): Promise<void> {
     const now = Date.now()
-    if (pg) {
-      await pg`INSERT INTO users (id, email, name, password, created_at) VALUES (${id}, ${email}, ${name}, ${passwordHash}, ${now})`
+    if (usingPostgres) {
+      await sql`INSERT INTO users (id, email, name, password, created_at) VALUES (${id}, ${email}, ${name}, ${passwordHash}, ${now})`
       return
     }
     sqlite!.prepare("INSERT INTO users (id, email, name, password, created_at) VALUES (?, ?, ?, ?, ?)").run(id, email, name, passwordHash, now)
   },
 
   async deleteAllSessions(userId: string): Promise<void> {
-    if (pg) {
-      await pg`DELETE FROM sessions WHERE user_id = ${userId}`
+    if (usingPostgres) {
+      await sql`DELETE FROM sessions WHERE user_id = ${userId}`
       return
     }
     sqlite!.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId)
   },
 
   async deleteUser(userId: string): Promise<void> {
-    if (pg) {
-      await pg`DELETE FROM users WHERE id = ${userId}`
+    if (usingPostgres) {
+      await sql`DELETE FROM users WHERE id = ${userId}`
       return
     }
     sqlite!.prepare("DELETE FROM users WHERE id = ?").run(userId)
@@ -231,8 +229,8 @@ export const db = {
 
   async clearUserData(userId: string): Promise<void> {
     const tables = ["account", "day_logs", "scans", "events", "health"]
-    if (pg) {
-      for (const t of tables) await pg`DELETE FROM ${pg(t)} WHERE user_id = ${userId}`
+    if (usingPostgres) {
+      for (const t of tables) { if (t === "account") { await sql`DELETE FROM account WHERE user_id = ${userId}` } else if (t === "day_logs") { await sql`DELETE FROM day_logs WHERE user_id = ${userId}` } else if (t === "scans") { await sql`DELETE FROM scans WHERE user_id = ${userId}` } else if (t === "events") { await sql`DELETE FROM events WHERE user_id = ${userId}` } else { await sql`DELETE FROM health WHERE user_id = ${userId}` } }
       return
     }
     for (const t of tables) sqlite!.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(userId)
@@ -240,8 +238,8 @@ export const db = {
 
   async getSessionUser(tokenHash: string): Promise<SessionUser | null> {
     const now = Date.now()
-    if (pg) {
-      const rows = (await pg`SELECT u.id, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id
+    if (usingPostgres) {
+      const rows = (await sql`SELECT u.id, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ${tokenHash} AND s.expires_at > ${now} LIMIT 1`) as unknown as SessionUser[]
       return rows[0] ?? null
     }
@@ -255,16 +253,16 @@ export const db = {
   },
 
   async insertSession(tokenHash: string, userId: string, expiresAt: number): Promise<void> {
-    if (pg) {
-      await pg`INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (${tokenHash}, ${userId}, ${Date.now()}, ${expiresAt})`
+    if (usingPostgres) {
+      await sql`INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (${tokenHash}, ${userId}, ${Date.now()}, ${expiresAt})`
       return
     }
     sqlite!.prepare("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)").run(tokenHash, userId, Date.now(), expiresAt)
   },
 
   async destroySession(tokenHash: string): Promise<void> {
-    if (pg) {
-      await pg`DELETE FROM sessions WHERE token_hash = ${tokenHash}`
+    if (usingPostgres) {
+      await sql`DELETE FROM sessions WHERE token_hash = ${tokenHash}`
       return
     }
     sqlite!.prepare("DELETE FROM sessions WHERE token_hash = ?").run(tokenHash)
@@ -273,10 +271,10 @@ export const db = {
   // ----- key/value-ish stores (account, health as JSON blobs; day_logs per date)
 
   async getJson(table: "account" | "health", userId: string): Promise<unknown | null> {
-    if (pg) {
+    if (usingPostgres) {
       const rows = table === "account"
-        ? await pg`SELECT data FROM account WHERE user_id = ${userId} LIMIT 1`
-        : await pg`SELECT data FROM health WHERE user_id = ${userId} LIMIT 1`
+        ? await sql`SELECT data FROM account WHERE user_id = ${userId} LIMIT 1`
+        : await sql`SELECT data FROM health WHERE user_id = ${userId} LIMIT 1`
       return rows[0] ? JSON.parse(rows[0].data as string) : null
     }
     const row = sqlite!.prepare(`SELECT data FROM ${table} WHERE user_id = ?`).get(userId) as { data: string } | undefined
@@ -286,12 +284,12 @@ export const db = {
   async putJson(table: "account" | "health", userId: string, data: unknown): Promise<void> {
     const now = Date.now()
     const json = JSON.stringify(data)
-    if (pg) {
+    if (usingPostgres) {
       if (table === "account") {
-        await pg`INSERT INTO account (user_id, data, updated_at) VALUES (${userId}, ${json}, ${now})
+        await sql`INSERT INTO account (user_id, data, updated_at) VALUES (${userId}, ${json}, ${now})
           ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`
       } else {
-        await pg`INSERT INTO health (user_id, data, updated_at) VALUES (${userId}, ${json}, ${now})
+        await sql`INSERT INTO health (user_id, data, updated_at) VALUES (${userId}, ${json}, ${now})
           ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`
       }
       return
@@ -305,8 +303,8 @@ export const db = {
   },
 
   async getDay(userId: string, date: string): Promise<unknown | null> {
-    if (pg) {
-      const rows = await pg`SELECT data FROM day_logs WHERE user_id = ${userId} AND date = ${date} LIMIT 1`
+    if (usingPostgres) {
+      const rows = await sql`SELECT data FROM day_logs WHERE user_id = ${userId} AND date = ${date} LIMIT 1`
       return rows[0] ? JSON.parse(rows[0].data as string) : null
     }
     const row = sqlite!.prepare("SELECT data FROM day_logs WHERE user_id = ? AND date = ?").get(userId, date) as { data: string } | undefined
@@ -316,8 +314,8 @@ export const db = {
   async putDay(userId: string, date: string, data: unknown): Promise<void> {
     const now = Date.now()
     const json = JSON.stringify(data)
-    if (pg) {
-      await pg`INSERT INTO day_logs (user_id, date, data, updated_at) VALUES (${userId}, ${date}, ${json}, ${now})
+    if (usingPostgres) {
+      await sql`INSERT INTO day_logs (user_id, date, data, updated_at) VALUES (${userId}, ${date}, ${json}, ${now})
         ON CONFLICT (user_id, date) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`
       return
     }
@@ -330,8 +328,8 @@ export const db = {
   },
 
   async listDays(userId: string): Promise<unknown[]> {
-    if (pg) {
-      const rows = await pg`SELECT data FROM day_logs WHERE user_id = ${userId} ORDER BY date DESC LIMIT 400`
+    if (usingPostgres) {
+      const rows = await sql`SELECT data FROM day_logs WHERE user_id = ${userId} ORDER BY date DESC LIMIT 400`
       return rows.map((r) => JSON.parse(r.data as string))
     }
     const rows = sqlite!.prepare("SELECT data FROM day_logs WHERE user_id = ? ORDER BY date DESC LIMIT 400").all(userId) as { data: string }[]
@@ -340,8 +338,8 @@ export const db = {
 
   async putScan(scan: { id: string; userId: string; date: string; dish: string; result: unknown }): Promise<void> {
     const json = JSON.stringify(scan.result).slice(0, 100_000)
-    if (pg) {
-      await pg`INSERT INTO scans (id, user_id, date, dish, result, created_at) VALUES (${scan.id}, ${scan.userId}, ${scan.date}, ${scan.dish}, ${json}, ${Date.now()})
+    if (usingPostgres) {
+      await sql`INSERT INTO scans (id, user_id, date, dish, result, created_at) VALUES (${scan.id}, ${scan.userId}, ${scan.date}, ${scan.dish}, ${json}, ${Date.now()})
         ON CONFLICT (id) DO UPDATE SET result = EXCLUDED.result`
       return
     }
@@ -355,9 +353,25 @@ export const db = {
     )
   },
 
+  async ping(): Promise<{ ok: boolean; error?: string }> {
+    try {
+      if (usingPostgres) {
+        await sql`SELECT 1`
+        return { ok: true }
+      }
+      if (sqlite) {
+        sqlite.prepare("SELECT 1").get()
+        return { ok: true }
+      }
+      return { ok: false, error: "no backend" }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  },
+
   async listScans(userId: string): Promise<{ id: string; date: string; dish: string; result: unknown; createdAt: number }[]> {
-    if (pg) {
-      const rows = await pg`SELECT id, date, dish, result, created_at FROM scans WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 100`
+    if (usingPostgres) {
+      const rows = await sql`SELECT id, date, dish, result, created_at FROM scans WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 100`
       return rows.map((r) => ({ id: r.id as string, date: r.date as string, dish: r.dish as string, result: JSON.parse(r.result as string), createdAt: Number(r.created_at) }))
     }
     const rows = sqlite!.prepare("SELECT id, date, dish, result, created_at FROM scans WHERE user_id = ? ORDER BY created_at DESC LIMIT 100").all(userId) as {
