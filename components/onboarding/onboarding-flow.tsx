@@ -29,6 +29,7 @@ import { activityLevels, calcNutrition } from "@/lib/nutrition-data"
 import { useAccount, type Gender, type Goal, type OnboardingData } from "@/lib/account"
 import { useSync } from "@/lib/sync"
 import { useFoodLog } from "@/lib/food-log"
+import { useSmartNotifications } from "@/lib/notifications"
 import { cn } from "@/lib/utils"
 
 const STEPS = 11 // 0..10
@@ -66,6 +67,10 @@ export function OnboardingFlow() {
   const [step, setStep] = useState(0)
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  // "I already have an account" → dedicated login form instead of silently skipping.
+  const [loginMode, setLoginMode] = useState(false)
+  const [loginEmail, setLoginEmail] = useState("")
+  const [loginPassword, setLoginPassword] = useState("")
 
   // Account
   const [name, setName] = useState(saved.name)
@@ -101,6 +106,27 @@ export function OnboardingFlow() {
 
   const next = () => setStep((s) => Math.min(s + 1, STEPS - 2)) // step 10 is the celebration
   const back = () => setStep((s) => Math.max(s - 1, 0))
+
+  /** Log in to an existing account: pull its data from the server, then open the app. */
+  const signInExisting = async () => {
+    if (authBusy) return
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail)
+    if (!emailOk || loginPassword.length < 8) {
+      setAuthError("Enter a valid email and your password (8+ characters).")
+      return
+    }
+    setAuthBusy(true)
+    setAuthError(null)
+    const r = await login(loginEmail.trim(), loginPassword)
+    if (!r.ok) {
+      setAuthBusy(false)
+      setAuthError(r.error === "network" ? "Server unreachable — try again." : r.error ?? "Login failed")
+      return
+    }
+    // markOnboarded opens the dashboard; the account store restores the cloud profile.
+    markOnboarded()
+    setAuthBusy(false)
+  }
 
   const buildData = (): OnboardingData => ({
     name: name.trim(),
@@ -142,6 +168,19 @@ export function OnboardingFlow() {
     serverOk = true
     update(buildData()) // persisted — onboarded stays false until the celebration ends
     resetDay() // calorie counter starts at 0 on the new account's day one
+    try {
+      // A brand-new account starts with a truly clean slate.
+      window.localStorage.setItem(
+        "nourish.health.v1",
+        JSON.stringify({ days: {} }),
+      )
+      window.localStorage.removeItem("nourish.premium.v1")
+      for (const k of Object.keys(window.localStorage)) {
+        if (k.startsWith("nourish.nudge.")) window.localStorage.removeItem(k)
+      }
+    } catch {
+      // storage unavailable
+    }
     setAuthBusy(false)
     setStep(STEPS - 1)
     if (serverOk && navigator.onLine) void fetch("/api/sync/account", {
@@ -183,7 +222,22 @@ export function OnboardingFlow() {
       )}
 
       <div className="flex flex-1 flex-col overflow-y-auto no-scrollbar px-6 pb-8">
-        {step === 0 && <WelcomeStep />}
+        {step === 0 && !loginMode && <WelcomeStep />}
+        {step === 0 && loginMode && (
+          <LoginStep
+            email={loginEmail}
+            setEmail={setLoginEmail}
+            password={loginPassword}
+            setPassword={setLoginPassword}
+            onBack={() => {
+              setLoginMode(false)
+              setAuthError(null)
+            }}
+            onSubmit={signInExisting}
+            busy={authBusy}
+            error={authError}
+          />
+        )}
         {step === 1 && <GoalStep goal={goal} setGoal={setGoal} />}
         {step === 2 && (
           <StatsStep
@@ -242,19 +296,27 @@ export function OnboardingFlow() {
           />
         )}
         {step === 10 && (
-          <CreatedStep
-            name={name}
-            result={result}
-            mealsPerDay={mealsPerDay}
-            waterGoal={waterGoal}
-            stepGoal={stepGoal}
+          <NotificationsStep
             onEnter={markOnboarded}
+            name={name}
           />
         )}
       </div>
 
       {step <= 9 && (
         <div className="px-6 pb-8 pt-2">
+          {step === 0 && loginMode && (
+            <button
+              type="button"
+              onClick={signInExisting}
+              disabled={authBusy}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.98]"
+            >
+              {authBusy ? "Signing in…" : "Log in"}
+              <ArrowRight className="h-5 w-5" />
+            </button>
+          )}
+          {!(step === 0 && loginMode) && (
           <button
             type="button"
             onClick={step === 9 ? createAccount : next}
@@ -276,13 +338,14 @@ export function OnboardingFlow() {
                   : "Continue"}
             <ArrowRight className="h-5 w-5" />
           </button>
+          )}
           {step === 9 && authError && (
             <p className="mt-2 text-center text-sm font-semibold text-destructive">{authError}</p>
           )}
-          {step === 0 && (
+          {step === 0 && !loginMode && (
             <button
               type="button"
-              onClick={markOnboarded}
+              onClick={() => setLoginMode(true)}
               className="mt-3 w-full text-center text-sm font-medium text-muted-foreground"
             >
               I already have an account
@@ -290,6 +353,49 @@ export function OnboardingFlow() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function NotificationsStep({ onEnter, name }: { onEnter: () => void; name: string }) {
+  const { permission, enable } = useSmartNotifications()
+  const [busy, setBusy] = useState(false)
+  const granted = permission === "granted"
+
+  return (
+    <div className="flex flex-1 flex-col animate-slide-up">
+      <div className="mx-auto mt-4 flex h-28 w-28 items-center justify-center rounded-[2rem] bg-accent text-6xl">
+        {granted ? "🔔" : "🔕"}
+      </div>
+      <h1 className="mt-6 text-3xl font-extrabold tracking-tight">
+        {granted ? "Reminders on!" : "Stay on track, " + (name.trim().split(/\s+/)[0] || "champ")}
+      </h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {granted
+          ? "Sahtek will nudge you if your streak is at risk, if you're under your goal, or if you haven't logged in a while."
+          : "Allow notifications so Sahtek can remind you to log meals, protect your streak and reach your goal — never spam."}
+      </p>
+      {!granted && (
+        <button
+          type="button"
+          onClick={async () => {
+            setBusy(true)
+            await enable()
+            setBusy(false)
+          }}
+          disabled={busy}
+          className="mt-6 flex items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/30 active:scale-[0.98]"
+        >
+          {busy ? "Asking…" : "🔔 Allow notifications"}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onEnter}
+        className="mt-3 w-full py-3 text-center text-sm font-bold text-muted-foreground"
+      >
+        {granted || permission === "denied" ? "Enter my dashboard →" : "Maybe later — enter dashboard →"}
+      </button>
     </div>
   )
 }
@@ -931,6 +1037,76 @@ function Stepper({
           +
         </button>
       </div>
+    </div>
+  )
+}
+
+function LoginStep({
+  email,
+  setEmail,
+  password,
+  setPassword,
+  onBack,
+  onSubmit,
+  busy,
+  error,
+}: {
+  email: string
+  setEmail: (v: string) => void
+  password: string
+  setPassword: (v: string) => void
+  onBack: () => void
+  onSubmit: () => void
+  busy: boolean
+  error: string | null
+}) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="flex flex-1 flex-col animate-slide-up">
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-2 flex w-fit items-center gap-1 text-sm font-semibold text-muted-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back
+      </button>
+      <h1 className="text-3xl font-extrabold tracking-tight">Welcome back 👋</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Log in to find your program, your journal and your streak — right where you left them.
+      </p>
+
+      <div className="mt-6 flex flex-col gap-3">
+        <label className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-sm">
+          <Mail className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            autoComplete="email"
+            className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground"
+          />
+        </label>
+        <label className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-sm">
+          <Lock className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <input
+            type={show ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSubmit()
+            }}
+            placeholder="Password"
+            autoComplete="current-password"
+            className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground"
+          />
+          <button type="button" onClick={() => setShow(!show)} aria-label="Toggle password visibility">
+            {show ? <EyeOff className="h-5 w-5 text-muted-foreground" /> : <Eye className="h-5 w-5 text-muted-foreground" />}
+          </button>
+        </label>
+        {error && <p className="text-sm font-semibold text-destructive">{error}</p>}
+      </div>
+      {busy && <p className="mt-4 animate-pulse text-sm text-muted-foreground">Checking your account…</p>}
     </div>
   )
 }

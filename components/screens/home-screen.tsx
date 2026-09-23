@@ -54,6 +54,8 @@ export function HomeScreen({
 
       {/* Calorie ring card */}
       <section className="rounded-3xl bg-card p-6 shadow-sm">
+        {/* Week strip — 7 dots for this week's adherence (MyFitnessPal-style) */}
+        <WeekStrip history={state.history} todayCalories={totals.calories} target={targets.calories} />
         <div className="flex items-center justify-center">
           <ProgressRing value={totals.calories} max={targets.calories} size={210} strokeWidth={18}>
             <span className="text-4xl font-extrabold tabular-nums">
@@ -97,6 +99,17 @@ export function HomeScreen({
         </button>
       </div>
 
+      {/* Net calories: eaten vs burned by workouts */}
+      <section className="flex items-center justify-between rounded-2xl bg-card px-4 py-3 shadow-sm">
+        <span className="text-sm font-semibold text-muted-foreground">Net calories (food − workout burn)</span>
+        <span className="text-sm font-extrabold tabular-nums">
+          {Math.max(0, Math.round(totals.calories - health.workoutMinutes * 8)).toLocaleString()} kcal
+          {health.workoutMinutes > 0 && (
+            <span className="ml-1 text-xs font-bold text-primary">−{health.workoutMinutes * 8} burn</span>
+          )}
+        </span>
+      </section>
+
       {/* Streak banner */}
       <StreakBanner streak={streak} hasLoggedToday={Object.values(state.meals).some((m) => m.length > 0)} />
 
@@ -129,6 +142,9 @@ export function HomeScreen({
         onAddSteps={() => addSteps(1000)}
         onAddWorkout={() => addWorkout(15)}
       />
+
+      {/* Tip of the day — rotates daily */}
+      <TipCard />
 
       {/* Meals */}
       <section>
@@ -336,6 +352,83 @@ function DeleteEntryButton({ meal, entryId }: { meal: MealKey; entryId: string }
       <Trash2 className="h-4 w-4" />
     </button>
   )
+}
+
+const TIPS = [
+  { emoji: "💧", text: "Drink a glass of water before each meal — it helps with satiety." },
+  { emoji: "🥗", text: "Fill half your plate with veggies at lunch and dinner." },
+  { emoji: "🚶", text: "A 10-minute walk after eating helps stabilize blood sugar." },
+  { emoji: "🥚", text: "Protein at breakfast keeps you full until lunch — try eggs or yogurt." },
+  { emoji: "🌶️", text: "Harissa and spices add flavor without calories — use them freely!" },
+  { emoji: "😴", text: "Poor sleep increases hunger hormones. Aim for 7-8 hours tonight." },
+  { emoji: "🍽️", text: "Eat slowly: your brain needs ~20 minutes to register fullness." },
+]
+
+function TipCard() {
+  const day = new Date().getDate() % TIPS.length
+  const tip = TIPS[day]
+  return (
+    <section className="flex items-center gap-3 rounded-2xl border border-[#a7f3d0]/15 bg-card p-4 shadow-sm">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-xl">{tip.emoji}</span>
+      <p className="text-sm font-medium text-muted-foreground">{tip.text}</p>
+    </section>
+  )
+}
+
+function WeekStrip({
+  history,
+  todayCalories,
+  target,
+}: {
+  history: { date: string; calories: number }[]
+  todayCalories: number
+  target: number
+}) {
+  const names = ["S", "M", "T", "W", "T", "F", "S"]
+  const days: { label: string; logged: boolean; inRange: boolean; isToday: boolean }[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const iso = d.toISOString().slice(0, 10)
+    const cals = iso === state_dateKey() ? todayCalories : history.find((h) => h.date === iso)?.calories ?? 0
+    const logged = cals > 0
+    const inRange = logged && cals <= target * 1.05
+    days.push({
+      label: names[d.getDay()],
+      logged,
+      inRange,
+      isToday: i === 0,
+    })
+  }
+  return (
+    <div className="mb-5 flex items-center justify-between">
+      {days.map((d, i) => (
+        <div key={i} className="flex flex-col items-center gap-1">
+          <span
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black",
+              d.isToday ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : "",
+              !d.logged
+                ? "bg-muted text-muted-foreground"
+                : d.inRange
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-fat text-[#e6fff1]",
+            )}
+            title={d.logged ? "Logged" : "Not logged"}
+          >
+            {d.logged ? (d.inRange ? "✓" : "•") : ""}
+          </span>
+          <span className={cn("text-[10px] font-bold", d.isToday ? "text-primary" : "text-muted-foreground")}>
+            {d.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function state_dateKey(): string {
+  return new Date().toISOString().slice(0, 10)
 }
 
 function MacroStat({ macroKey, value, target }: { macroKey: MacroKey; value: number; target: number }) {
