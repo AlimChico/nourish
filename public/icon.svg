@@ -1,15 +1,61 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    @media (prefers-color-scheme: light) {
-      .background { fill: #0B0F0D; }
-      .letter { fill: #34D399; }
-    }
-    @media (prefers-color-scheme: dark) {
-      .background { fill: #0B0F0D; }
-      .letter { fill: #34D399; }
-    }
-  </style>
-  <rect class="background" width="180" height="180" rx="42"/>
-  <path class="letter" d="M118 56c-8-8-19-12-30-12-17 0-30 9-30 24 0 13 9 19 26 23l12 3c11 2.5 16 5.5 16 11 0 7-7 11-17 11-12 0-23-5-31-14l-9 12c9 11 23 17 39 17 19 0 32-10 32-26 0-14-9-20-27-24.5l-12-3c-10-2.4-15-5-15-10.5 0-6.5 6.5-10 15.5-10 10 0 19 4 26 11l6.5-11.5z" fill-rule="evenodd"/>
-  <circle cx="90" cy="90" r="78" stroke="#34D399" stroke-opacity="0.35" stroke-width="4" fill="none"/>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <!-- Aurora background, as on the brand image -->
+    <radialGradient id="bgGlowTR" cx="88%" cy="6%" r="55%">
+      <stop offset="0%" stop-color="#3ddc84" stop-opacity="0.85"/>
+      <stop offset="45%" stop-color="#16a34a" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#0b0f0d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bgGlowBL" cx="8%" cy="96%" r="55%">
+      <stop offset="0%" stop-color="#4ade80" stop-opacity="0.8"/>
+      <stop offset="45%" stop-color="#16a34a" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#0b0f0d" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Letter gradient: mint → teal, like the reference -->
+    <linearGradient id="letterGrad" x1="30%" y1="10%" x2="75%" y2="95%">
+      <stop offset="0%" stop-color="#e8fff4"/>
+      <stop offset="35%" stop-color="#7df0c0"/>
+      <stop offset="70%" stop-color="#2ecf9a"/>
+      <stop offset="100%" stop-color="#14b8a6"/>
+    </linearGradient>
+    <linearGradient id="leaf1Grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0d9488"/>
+      <stop offset="100%" stop-color="#5eead4"/>
+    </linearGradient>
+    <linearGradient id="leaf2Grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="55%" stop-color="#a7f3d0"/>
+      <stop offset="100%" stop-color="#d9f99d"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background: near-black with two aurora glows (top-right, bottom-left) -->
+  <rect width="512" height="512" rx="112" fill="#0b0f0d"/>
+  <rect width="512" height="512" rx="112" fill="url(#bgGlowTR)"/>
+  <rect width="512" height="512" rx="112" fill="url(#bgGlowBL)"/>
+
+  <!-- S letter -->
+  <path fill="url(#letterGrad)" d="
+    M 342 150
+    C 316 122 279 106 238 106
+    C 182 106 143 137 143 185
+    C 143 231 176 254 236 268
+    L 272 276
+    C 308 285 323 296 323 314
+    C 323 336 300 350 264 350
+    C 226 350 193 336 171 310
+    L 143 344
+    C 172 382 216 404 262 404
+    C 322 404 365 372 365 316
+    C 365 272 334 247 272 233
+    L 236 225
+    C 202 217 187 206 187 188
+    C 187 168 208 155 240 155
+    C 271 155 298 166 318 186
+    Z"/>
+
+  <!-- Leaf 1 (small, left) -->
+  <path fill="url(#leaf1Grad)" d="M 258 96 C 246 74 250 52 262 40 C 288 46 304 62 306 84 C 292 96 274 100 258 96 Z"/>
+  <!-- Leaf 2 (large, right) -->
+  <path fill="url(#leaf2Grad)" d="M 296 88 C 288 52 310 20 344 12 C 368 40 368 74 344 96 C 326 100 308 98 296 88 Z"/>
 </svg>

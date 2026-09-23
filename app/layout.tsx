@@ -9,26 +9,18 @@ const manrope = Manrope({
 })
 
 export const metadata: Metadata = {
-  title: 'Sahtek — Calorie & Nutrition Tracker',
+  title: 'Sahtek — Your Health. Our Priority.',
   description:
     'Track your nutrition, reach your goals, and become a healthier version of yourself.',
   generator: 'v0.app',
   icons: {
     icon: [
       {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
         url: '/icon.svg',
         type: 'image/svg+xml',
       },
     ],
-    apple: '/apple-icon.png',
+    apple: '/icon.svg',
   },
 }
 
