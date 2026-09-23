@@ -87,6 +87,7 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
   const startScanner = useCallback(async () => {
     setError(null)
     lastCodeRef.current = ""
+    stopScanner() // never double-start the camera
     try {
       const reader = new BrowserMultiFormatReader()
       const controls = await reader.decodeFromVideoDevice(undefined, videoRef.current!, (result) => {
@@ -101,7 +102,7 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
       setError("Caméra inaccessible. Autorise l'accès ou entre le code à la main.")
       setPhase("error")
     }
-  }, [lookup])
+  }, [lookup, stopScanner])
 
   useEffect(() => {
     void startScanner()
@@ -111,10 +112,23 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
 
   const backToScan = () => {
     setProduct(null)
+    setError(null)
     setPhase("scanning")
     lastCodeRef.current = ""
     void startScanner()
   }
+
+  /** Manual barcode entry with real validation (EAN-8, UPC-A, EAN-13). */
+  const submitManual = () => {
+    const code = manualCode.trim()
+    if (!/^\d{8}$|^\d{12,13}$/.test(code)) {
+      setManualError("Code invalide : 8, 12 ou 13 chiffres attendus.")
+      return
+    }
+    setManualError("")
+    void lookup(code)
+  }
+  const [manualError, setManualError] = useState("")
 
   const add = () => {
     if (!product) return
@@ -302,6 +316,13 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 {error}
               </p>
+              <button
+                type="button"
+                onClick={backToScan}
+                className="mt-2 w-full rounded-xl bg-amber-400/20 py-2 text-xs font-bold text-amber-200 active:scale-95"
+              >
+                Réessayer le scan
+              </button>
             </div>
           )}
 
@@ -310,24 +331,30 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
             <form
               onSubmit={(e) => {
                 e.preventDefault()
-                if (/^\d{8}$|^\d{12,13}$/.test(manualCode.trim())) void lookup(manualCode.trim())
+                submitManual()
               }}
-              className="flex gap-2"
+              className="flex flex-col gap-1.5"
             >
-              <input
-                value={manualCode}
-                onChange={(e) => setManualCode(e.target.value.replace(/\D/g, "").slice(0, 13))}
-                inputMode="numeric"
-                placeholder="Code-barres manuel (ex : 3017620422003)"
-                className="flex-1 rounded-2xl bg-card px-4 py-3 text-sm font-medium outline-none placeholder:text-muted-foreground"
-              />
-              <button
-                type="submit"
-                aria-label="Lookup barcode"
-                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground active:scale-95"
-              >
-                <BarChart3 className="h-5 w-5 text-primary" />
-              </button>
+              <div className="flex gap-2">
+                <input
+                  value={manualCode}
+                  onChange={(e) => {
+                    setManualCode(e.target.value.replace(/\D/g, "").slice(0, 13))
+                    setManualError("")
+                  }}
+                  inputMode="numeric"
+                  placeholder="Code-barres manuel (ex : 3017620422003)"
+                  className="flex-1 rounded-2xl bg-card px-4 py-3 text-sm font-medium outline-none placeholder:text-muted-foreground"
+                />
+                <button
+                  type="submit"
+                  aria-label="Lookup barcode"
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground active:scale-95"
+                >
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                </button>
+              </div>
+              {manualError && <p className="animate-fade-in text-xs font-bold text-amber-300">{manualError}</p>}
             </form>
           </div>
         </div>

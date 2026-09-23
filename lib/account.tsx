@@ -27,6 +27,8 @@ export function computeTargets(a: AccountState) {
     activity: a.activity,
     goal: a.goal,
   })
+  // A manual override (Settings → Goals) wins over the computed target.
+  if (a.calorieOverride && a.calorieOverride >= 800) n.calories = a.calorieOverride
   return { ...n, water: a.waterGoal, steps: a.stepGoal }
 }
 
@@ -93,6 +95,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
           window.localStorage.removeItem("nourish.food-log.v1")
           window.localStorage.removeItem("nourish.premium.v1")
           window.localStorage.removeItem("nourish.health.v1")
+          window.localStorage.removeItem("nourish.weight.v1")
         } catch {
           // storage unavailable
         }

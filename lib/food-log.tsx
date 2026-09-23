@@ -23,6 +23,7 @@ export type MealEntry = {
   entryId: string
   food: FoodItem
   quantity: number
+  loggedAt?: number // epoch ms — powers the time-of-day timeline
 }
 
 export type Meal = {
@@ -82,6 +83,7 @@ function normalize(state: unknown): LogState {
       meals[key] = arr.filter(
         (e): e is MealEntry => !!e && typeof e === "object" && !!e.food && typeof e.entryId === "string",
       )
+        .map((e) => ({ ...e, loggedAt: typeof e.loggedAt === "number" ? e.loggedAt : undefined }))
     }
   }
   const history = Array.isArray(s.history)
@@ -124,7 +126,7 @@ function reducer(state: LogState, action: Action): LogState {
           ...state.meals,
           [action.meal]: [
             ...state.meals[action.meal],
-            { entryId: makeId("e"), food: action.food, quantity: action.quantity ?? 1 },
+            { entryId: makeId("e"), food: action.food, quantity: action.quantity ?? 1, loggedAt: Date.now() },
           ],
         },
       }

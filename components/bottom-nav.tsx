@@ -15,12 +15,11 @@ const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
 
 export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab: TabKey) => void }) {
   return (
-    <nav
-      className="sticky bottom-0 z-30 w-full shrink-0 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
-      aria-label="Main navigation"
-    >
-      {/* max-w + mx-auto keeps the 5 tabs centered and even on wide screens */}
-      <div className="mx-auto flex w-full max-w-lg items-stretch px-2 pt-1.5">
+    <div className="pointer-events-none sticky bottom-0 z-30 w-full px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2">
+      <nav
+        aria-label="Main navigation"
+        className="pointer-events-auto mx-auto flex w-full max-w-md items-stretch rounded-[1.65rem] border border-[#a7f3d0]/12 bg-[#0d1813]/92 shadow-[0_14px_44px_rgba(0,0,0,0.55),0_2px_0_rgba(167,243,208,0.06)_inset,0_0_28px_rgba(52,211,153,0.09)] backdrop-blur-xl"
+      >
         {tabs.map((t) => {
           const Icon = t.icon
           const isActive = active === t.key
@@ -29,32 +28,46 @@ export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab
               key={t.key}
               type="button"
               onClick={() => onChange(t.key)}
-              className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl py-1.5 active:scale-95"
               aria-current={isActive ? "page" : undefined}
+              className="group relative flex min-w-0 flex-1 flex-col items-center justify-start rounded-[1.4rem] py-2 transition-transform duration-150 active:scale-90"
             >
+              {/* Active pill — lifts behind the icon */}
               <span
                 className={cn(
-                  "flex h-9 w-14 items-center justify-center rounded-full transition-colors",
-                  isActive && "bg-accent",
+                  "absolute left-1/2 top-[3px] h-[42px] w-[52px] -translate-x-1/2 rounded-[1.1rem] transition-all duration-300 ease-out",
+                  isActive
+                    ? "scale-100 bg-primary/18 opacity-100 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
+                    : "scale-50 opacity-0",
                 )}
-              >
-                <Icon
-                  className={cn("h-5 w-5 transition-colors", isActive ? "text-primary" : "text-muted-foreground")}
-                  strokeWidth={isActive ? 2.5 : 2}
-                />
-              </span>
+              />
+              <Icon
+                className={cn(
+                  "relative h-[22px] w-[22px] transition-all duration-300 ease-out",
+                  isActive
+                    ? "-translate-y-[2px] text-primary drop-shadow-[0_0_10px_rgba(52,211,153,0.7)]"
+                    : "translate-y-0 text-muted-foreground group-active:text-[#e6fff1]",
+                )}
+                strokeWidth={isActive ? 2.4 : 1.85}
+              />
               <span
                 className={cn(
-                  "truncate text-[10px] font-semibold leading-none",
+                  "relative mt-0.5 text-[9.5px] font-bold leading-none tracking-tight transition-colors duration-300",
                   isActive ? "text-primary" : "text-muted-foreground",
                 )}
               >
                 {t.label}
               </span>
+              {/* Underline dot */}
+              <span
+                className={cn(
+                  "relative mt-1 h-1 w-1 rounded-full bg-primary transition-all duration-300",
+                  isActive ? "scale-100 opacity-100" : "scale-0 opacity-0",
+                )}
+              />
             </button>
           )
         })}
-      </div>
-    </nav>
+      </nav>
+    </div>
   )
 }

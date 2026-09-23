@@ -18,6 +18,7 @@ export type AccountState = {
   units: Units
   waterGoal: number // glasses / day
   stepGoal: number // steps / day
+  calorieOverride: number | null // manual daily calorie target (null = auto from BMR/TDEE)
   notifications: boolean
   diet: Diet
   allergies: string[]
@@ -39,6 +40,7 @@ export const DEFAULT_ACCOUNT: AccountState = {
   units: "metric",
   waterGoal: 8,
   stepGoal: 10000,
+  calorieOverride: null,
   notifications: true,
   diet: "none",
   allergies: [],
@@ -68,6 +70,10 @@ export function normalizeAccount(raw: unknown): AccountState {
     units: s.units === "imperial" ? "imperial" : "metric",
     waterGoal: clamp(Math.round(Number(s.waterGoal) || DEFAULT_ACCOUNT.waterGoal), 2, 20),
     stepGoal: clamp(Math.round(Number(s.stepGoal) || DEFAULT_ACCOUNT.stepGoal), 1000, 50000),
+    calorieOverride:
+      typeof s.calorieOverride === "number" && isFinite(s.calorieOverride)
+        ? clamp(Math.round(s.calorieOverride), 800, 6000)
+        : null,
     notifications: typeof s.notifications === "boolean" ? s.notifications : true,
     diet:
       s.diet === "vegetarian" || s.diet === "vegan" || s.diet === "pescatarian" || s.diet === "halal"

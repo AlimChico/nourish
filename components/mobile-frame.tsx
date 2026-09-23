@@ -10,8 +10,9 @@ export function MobileFrame({ children, className }: { children: React.ReactNode
   return (
     <div className="flex min-h-dvh justify-center aurora-bg">        <div
         className={cn(
-          // Phone: locked to viewport height — inner <main> scrolls, nav stays pinned
+          // Phone: locked to viewport height, rounded screen edges even without notch
           "relative flex h-dvh w-full flex-col overflow-hidden bg-background",
+          "rounded-[1.9rem]",
           // Tablet portrait / landscape: floating rounded card
           "sm:my-auto sm:h-[92dvh] sm:max-h-[1000px] sm:w-[640px] sm:items-stretch",
           "lg:w-[960px]",
@@ -19,6 +20,7 @@ export function MobileFrame({ children, className }: { children: React.ReactNode
           "sm:shadow-[0_0_90px_rgba(52,211,153,0.16),0_25px_60px_rgba(0,0,0,0.55)]",
           className,
         )}
+        style={{ WebkitTapHighlightColor: "transparent" }}
       >
         {children}
       </div>

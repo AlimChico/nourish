@@ -93,6 +93,11 @@ async function makePostgres(url: string) {
     data TEXT NOT NULL,
     updated_at BIGINT NOT NULL
   )`
+  await sql`CREATE TABLE IF NOT EXISTS weight (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    data TEXT NOT NULL,
+    updated_at BIGINT NOT NULL
+  )`
   await sql`CREATE TABLE IF NOT EXISTS events (
     id BIGSERIAL PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -162,6 +167,10 @@ CREATE TABLE IF NOT EXISTS health (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   data TEXT NOT NULL, updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS weight (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  data TEXT NOT NULL, updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date TEXT NOT NULL, type TEXT NOT NULL, payload TEXT, created_at INTEGER NOT NULL
@@ -228,9 +237,16 @@ export const db = {
   },
 
   async clearUserData(userId: string): Promise<void> {
-    const tables = ["account", "day_logs", "scans", "events", "health"]
+    const tables = ["account", "day_logs", "scans", "events", "health", "weight"] as const
     if (usingPostgres) {
-      for (const t of tables) { if (t === "account") { await sql`DELETE FROM account WHERE user_id = ${userId}` } else if (t === "day_logs") { await sql`DELETE FROM day_logs WHERE user_id = ${userId}` } else if (t === "scans") { await sql`DELETE FROM scans WHERE user_id = ${userId}` } else if (t === "events") { await sql`DELETE FROM events WHERE user_id = ${userId}` } else { await sql`DELETE FROM health WHERE user_id = ${userId}` } }
+      for (const t of tables) {
+        if (t === "account") await sql`DELETE FROM account WHERE user_id = ${userId}`
+        else if (t === "day_logs") await sql`DELETE FROM day_logs WHERE user_id = ${userId}`
+        else if (t === "scans") await sql`DELETE FROM scans WHERE user_id = ${userId}`
+        else if (t === "events") await sql`DELETE FROM events WHERE user_id = ${userId}`
+        else if (t === "health") await sql`DELETE FROM health WHERE user_id = ${userId}`
+        else await sql`DELETE FROM weight WHERE user_id = ${userId}`
+      }
       return
     }
     for (const t of tables) sqlite!.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(userId)
@@ -270,26 +286,32 @@ export const db = {
 
   // ----- key/value-ish stores (account, health as JSON blobs; day_logs per date)
 
-  async getJson(table: "account" | "health", userId: string): Promise<unknown | null> {
+  async getJson(table: "account" | "health" | "weight", userId: string): Promise<unknown | null> {
     if (usingPostgres) {
-      const rows = table === "account"
-        ? await sql`SELECT data FROM account WHERE user_id = ${userId} LIMIT 1`
-        : await sql`SELECT data FROM health WHERE user_id = ${userId} LIMIT 1`
+      const rows =
+        table === "account"
+          ? await sql`SELECT data FROM account WHERE user_id = ${userId} LIMIT 1`
+          : table === "health"
+            ? await sql`SELECT data FROM health WHERE user_id = ${userId} LIMIT 1`
+            : await sql`SELECT data FROM weight WHERE user_id = ${userId} LIMIT 1`
       return rows[0] ? JSON.parse(rows[0].data as string) : null
     }
     const row = sqlite!.prepare(`SELECT data FROM ${table} WHERE user_id = ?`).get(userId) as { data: string } | undefined
     return row ? JSON.parse(row.data) : null
   },
 
-  async putJson(table: "account" | "health", userId: string, data: unknown): Promise<void> {
+  async putJson(table: "account" | "health" | "weight", userId: string, data: unknown): Promise<void> {
     const now = Date.now()
     const json = JSON.stringify(data)
     if (usingPostgres) {
       if (table === "account") {
         await sql`INSERT INTO account (user_id, data, updated_at) VALUES (${userId}, ${json}, ${now})
           ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`
-      } else {
+      } else if (table === "health") {
         await sql`INSERT INTO health (user_id, data, updated_at) VALUES (${userId}, ${json}, ${now})
+          ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`
+      } else {
+        await sql`INSERT INTO weight (user_id, data, updated_at) VALUES (${userId}, ${json}, ${now})
           ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`
       }
       return

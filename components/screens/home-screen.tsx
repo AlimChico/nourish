@@ -1,11 +1,12 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Camera, ChevronDown, Minus, Plus, Trash2 } from "lucide-react"
+import { Camera, ChevronDown, Minus, Plus, Trash2, Share2, Check } from "lucide-react"
 import { ProgressRing } from "@/components/progress-ring"
 import { AnimatedCounter } from "@/components/animated-counter"
 import { dailyTargets, macroMeta, type MacroKey } from "@/lib/nutrition-data"
 import { dayTotals, mealMeta, mealOrder, totalsFor, useFoodLog, type MealKey } from "@/lib/food-log"
+import { suggestRecipes } from "@/lib/food-requests"
 import { useAccount } from "@/lib/account"
 import { useHealth } from "@/lib/health"
 import { useStreak } from "@/components/use-streak"
@@ -102,12 +103,17 @@ export function HomeScreen({
       {/* Net calories: eaten vs burned by workouts */}
       <section className="flex items-center justify-between rounded-2xl bg-card px-4 py-3 shadow-sm">
         <span className="text-sm font-semibold text-muted-foreground">Net calories (food − workout burn)</span>
-        <span className="text-sm font-extrabold tabular-nums">
-          {Math.max(0, Math.round(totals.calories - health.workoutMinutes * 8)).toLocaleString()} kcal
-          {health.workoutMinutes > 0 && (
-            <span className="ml-1 text-xs font-bold text-primary">−{health.workoutMinutes * 8} burn</span>
-          )}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-extrabold tabular-nums">
+            {Math.max(0, Math.round(totals.calories - health.workoutMinutes * 8)).toLocaleString()} kcal
+            {health.workoutMinutes > 0 && (
+              <span className="ml-1 text-xs font-bold text-primary">−{health.workoutMinutes * 8} burn</span>
+            )}
+          </span>
+          <ShareButton
+            text={`I've eaten ${Math.round(totals.calories)} kcal today on Sahtek — ${remaining} kcal left of my goal! 🥗🔥`}
+          />
+        </div>
       </section>
 
       {/* Streak banner */}
@@ -142,6 +148,9 @@ export function HomeScreen({
         onAddSteps={() => addSteps(1000)}
         onAddWorkout={() => addWorkout(15)}
       />
+
+      {/* Recipe suggestions based on remaining calories */}
+      {remaining > 0 && totals.calories > 0 && <SuggestionsCard remaining={remaining} />}
 
       {/* Tip of the day — rotates daily */}
       <TipCard />
@@ -350,6 +359,93 @@ function DeleteEntryButton({ meal, entryId }: { meal: MealKey; entryId: string }
       className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground active:scale-90"
     >
       <Trash2 className="h-4 w-4" />
+    </button>
+  )
+}
+
+/** Recipe ideas that fit what's left of the daily budget (Suggestion engine in lib/food-requests). */
+function SuggestionsCard({ remaining }: { remaining: number }) {
+  const suggestions = useMemo(() => suggestRecipes(remaining), [remaining])
+  const { addFood } = useFoodLog()
+  const [added, setAdded] = useState<string | null>(null)
+
+  const quickAdd = (name: string, kcal: number, protein: number, carbs: number, fat: number, emoji: string) => {
+    addFood(
+      // right meal for the current hour
+      new Date().getHours() < 11 ? "breakfast" : new Date().getHours() < 16 ? "lunch" : new Date().getHours() < 22 ? "dinner" : "snacks",
+      { id: `sugg_${name}`, name, serving: "1 portion", calories: kcal, protein, carbs, fat, emoji },
+    )
+    setAdded(name)
+    window.setTimeout(() => setAdded(null), 1500)
+  }
+
+  return (
+    <section className="animate-fade-in rounded-3xl bg-card p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 font-extrabold">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-primary">🍽️</span>
+          Fits your {remaining.toLocaleString()} kcal left
+        </h2>
+      </div>
+      <div className="flex snap-x gap-2 overflow-x-auto no-scrollbar pb-1">
+        {suggestions.map((s) => (
+          <div
+            key={s.name}
+            className="w-40 shrink-0 snap-start rounded-2xl border border-[#a7f3d0]/15 bg-muted/40 p-3"
+          >
+            <span className="text-2xl">{s.emoji}</span>
+            <p className="mt-1 truncate text-sm font-bold">{s.name}</p>
+            <p className="truncate text-[11px] text-muted-foreground">{s.detail}</p>
+            <p className="mt-1 text-xs font-extrabold text-primary">{s.calories} kcal · P{s.protein}</p>
+            <button
+              type="button"
+              onClick={() => quickAdd(s.name, s.calories, s.protein, s.carbs, s.fat, s.emoji)}
+              className={cn(
+                "mt-2 flex w-full items-center justify-center gap-1 rounded-xl py-1.5 text-xs font-bold transition-all active:scale-95",
+                added === s.name ? "bg-primary/20 text-primary" : "bg-primary text-primary-foreground",
+              )}
+            >
+              {added === s.name ? (
+                <>
+                  <Check className="h-3.5 w-3.5" strokeWidth={3} /> Added!
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" strokeWidth={3} /> Quick add
+                </>
+              )}
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** Native share (WhatsApp, Messages…) with clipboard fallback. */
+function ShareButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false)
+  const share = async () => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: "Sahtek", text })
+        return
+      }
+      await navigator.clipboard.writeText(text)
+      setDone(true)
+      window.setTimeout(() => setDone(false), 1500)
+    } catch {
+      // user cancelled — ignore
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void share()}
+      aria-label="Share today's progress"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-primary transition-transform active:scale-90"
+    >
+      {done ? <Check className="h-4 w-4" strokeWidth={3} /> : <Share2 className="h-4 w-4" />}
     </button>
   )
 }

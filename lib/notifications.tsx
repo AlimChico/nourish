@@ -11,12 +11,15 @@ import { useHealth } from "@/lib/health"
  *  - Streak at risk: you logged yesterday and today but nothing yet this evening.
  *  - Goal not reached: after 20:00, calories still far below target.
  *  - Inactivity: no meal logged all day and it's past 14:00.
+ *  - Meal reminders: lunch not logged by 14:00, dinner not logged by 21:30.
  */
 
 type Rules = {
   streakAtRisk: boolean
   goalNotReached: boolean
   inactive: boolean
+  lunchMissing: boolean
+  dinnerMissing: boolean
 }
 
 type Store = {
@@ -66,12 +69,15 @@ export function SmartNotificationsProvider({ children }: { children: React.React
 
   const rules = useMemo<Rules>(() => {
     const hour = new Date().getHours()
+    const minute = new Date().getMinutes()
     const calories = dayTotals(state.meals).calories
     const loggedToday = state.meals && Object.values(state.meals).some((m) => m.length > 0)
     return {
       streakAtRisk: streak > 0 && !loggedToday && hour >= 17,
       goalNotReached: hour >= 20 && calories > 0 && calories < targets.calories * 0.7,
       inactive: !loggedToday && hour >= 14 && health.steps < 2000,
+      lunchMissing: !loggedToday && hour >= 14 && hour < 17,
+      dinnerMissing: hour >= 21 || (hour === 21 && minute >= 0) ? state.meals.dinner.length === 0 && state.meals.snacks.length === 0 && calories < targets.calories * 0.8 : false,
     }
   }, [state, streak, targets.calories, health.steps])
 
@@ -99,6 +105,8 @@ export function SmartNotificationsProvider({ children }: { children: React.React
       if (rules.streakAtRisk) fired("streak")
       if (rules.goalNotReached) fired("goal")
       if (rules.inactive) fired("inactive")
+      if (rules.lunchMissing) fired("lunch")
+      if (rules.dinnerMissing) fired("dinner")
     }
 
     evaluate()
@@ -120,6 +128,14 @@ export function SmartNotificationsProvider({ children }: { children: React.React
       inactive: {
         title: "⏰ Time to log your meals",
         body: "Nothing logged today. It takes 30 seconds with the scanner!",
+      },
+      lunch: {
+        title: "🥗 Lunchtime check-in",
+        body: "You haven't logged lunch yet — snap a photo of your plate!",
+      },
+      dinner: {
+        title: "🍽️ Dinner reminder",
+        body: "Log your dinner before the day ends to protect your streak.",
       },
     }
     const msg = messages[key]

@@ -17,6 +17,10 @@ import {
   Trash2,
   Check,
   Info,
+  Flame,
+  Download,
+  Activity,
+  Pencil,
 } from "lucide-react"
 import { useAccount, type Gender, type Goal } from "@/lib/account"
 import { useSync } from "@/lib/sync"
@@ -133,6 +137,18 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 desc={`${targets.calories} kcal · ${targets.protein}g protein`}
                 onClick={() => setSection("goals")}
               />
+              <Row
+                icon={Flame}
+                label="BMR & TDEE"
+                desc={`BMR ${targets.bmr} kcal · maintenance ${targets.tdee} kcal`}
+                onClick={() => setSection("goals")}
+              />
+              <Row
+                icon={Download}
+                label="Export my data"
+                desc="Download everything as JSON"
+                onClick={exportData}
+              />
               <Row icon={Droplets} label="Water goal" desc={`${state.waterGoal} glasses / day`} onClick={() => setSection("goals")} />
               <Row icon={Footprints} label="Steps goal" desc={`${state.stepGoal.toLocaleString()} steps / day`} onClick={() => setSection("goals")} />
             </Group>
@@ -240,6 +256,38 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   )
+}
+
+/** Download every local store as one JSON file — the user owns their data. */
+function exportData(): void {
+  try {
+    const pick = (k: string) => {
+      try {
+        return JSON.parse(window.localStorage.getItem(k) ?? "null")
+      } catch {
+        return null
+      }
+    }
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      app: "Sahtek",
+      version: 2,
+      account: pick("nourish.account.v1"),
+      foodLog: pick("nourish.food-log.v1"),
+      weight: pick("nourish.weight.v1"),
+      health: pick("nourish.health.v1"),
+      customFoods: pick("nourish.custom-foods.v1"),
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `sahtek-export-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    // ignore
+  }
 }
 
 function dietLabel(state: { diet: string }): string {
@@ -502,6 +550,8 @@ function GoalsSection() {
         onChange={(n) => update({ stepGoal: n })}
       />
 
+      <CalorieOverrideCard />
+
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Calories", value: `${targets.calories}`, sub: "kcal" },
@@ -588,6 +638,92 @@ function AllergiesSection() {
       </div>
       <p className="rounded-xl bg-card p-3 text-xs text-muted-foreground">
         Scanned foods containing these allergens will be flagged.
+      </p>
+    </div>
+  )
+}
+
+/** Manual daily-calorie override — wins over the BMR/TDEE computation. */
+function CalorieOverrideCard() {
+  const { state, update, targets } = useAccount()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(state.calorieOverride ? String(state.calorieOverride) : "")
+  const parsed = Number(value.replace(/\D/g, ""))
+  const valid = parsed >= 800 && parsed <= 6000
+
+  if (!editing) {
+    return (
+      <div className="rounded-2xl bg-card p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Calorie target</p>
+            <p className="text-xs text-muted-foreground">
+              {state.calorieOverride
+                ? `Custom — ${state.calorieOverride} kcal / day`
+                : `Auto from BMR/TDEE — ${targets.calories} kcal / day`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setValue(state.calorieOverride ? String(state.calorieOverride) : "")
+              setEditing(true)
+            }}
+            aria-label="Edit calorie target"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-primary active:scale-90"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        </div>
+        {state.calorieOverride && (
+          <button
+            type="button"
+            onClick={() => update({ calorieOverride: null })}
+            className="mt-2 text-xs font-bold text-primary"
+          >
+            Back to automatic ({targets.tdee > 0 ? "recommended" : "auto"})
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border-2 border-primary/40 bg-card p-4 shadow-sm">
+      <p className="text-sm font-semibold">Custom calorie target</p>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value.replace(/\D/g, "").slice(0, 4))}
+          inputMode="numeric"
+          placeholder="e.g. 2000"
+          className="flex-1 rounded-xl border-2 border-border bg-background px-3 py-2.5 text-sm font-bold outline-none focus:border-primary"
+        />
+        <span className="text-sm font-bold text-muted-foreground">kcal</span>
+      </div>
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          className="flex-1 rounded-xl bg-muted py-2.5 text-sm font-bold"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={!valid}
+          onClick={() => {
+            update({ calorieOverride: parsed })
+            setEditing(false)
+          }}
+          className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-40"
+        >
+          Save
+        </button>
+      </div>
+      <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <Activity className="h-3.5 w-3.5" />
+        Auto value: {targets.bmr} BMR · {targets.tdee} maintenance
       </p>
     </div>
   )

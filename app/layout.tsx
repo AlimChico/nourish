@@ -22,6 +22,12 @@ export const metadata: Metadata = {
     ],
     apple: '/icon.svg',
   },
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Sahtek',
+  },
 }
 
 export const viewport: Viewport = {
@@ -49,6 +55,16 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased">
         {children}
+        {/* Service worker: production only — in dev it would serve stale bundles,
+            and we actively unregister/clean any left-over registration. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              process.env.NODE_ENV === 'production'
+                ? `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}`
+                : `if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister()})});if(window.caches){caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k)})})}}`,
+          }}
+        />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

@@ -1,0 +1,18 @@
+{
+  "name": "Sahtek — Your Health. Our Priority.",
+  "short_name": "Sahtek",
+  "description": "Track your nutrition, reach your goals, and become a healthier version of yourself.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f0d",
+  "theme_color": "#0b0f0d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -20,6 +20,7 @@ import { AccountProvider, useAccount } from "@/lib/account"
 import { SyncProvider, useSync } from "@/lib/sync"
 import { HealthProvider } from "@/lib/health"
 import { SmartNotificationsProvider } from "@/lib/notifications"
+import { WeightProvider } from "@/lib/weight"
 
 type Overlay = "none" | "calculator" | "premium" | "scan" | "barcode" | "settings"
 
@@ -82,9 +83,11 @@ export default function Page() {
         <PremiumProvider>
           <FoodLogProvider>
             <HealthProvider>
-              <SmartNotificationsProvider>
-                <App />
-              </SmartNotificationsProvider>
+              <WeightProvider>
+                <SmartNotificationsProvider>
+                  <App />
+                </SmartNotificationsProvider>
+              </WeightProvider>
             </HealthProvider>
           </FoodLogProvider>
         </PremiumProvider>

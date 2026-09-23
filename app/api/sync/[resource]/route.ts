@@ -36,6 +36,16 @@ function sanitizeDay(raw: unknown): { date: string; data: unknown } | null {
     history: Array.isArray(s.history)
       ? (s.history as unknown[]).filter((d) => d && typeof d === "object" && DATE_RE.test((d as { date?: string }).date ?? "")).slice(0, 400)
       : [],
+    customFoods: Array.isArray(s.customFoods) ? (s.customFoods as unknown[]).slice(0, 300) : [],
+    weightEntries: Array.isArray(s.weightEntries)
+      ? (s.weightEntries as unknown[])
+          .filter((e) => {
+            const w = e as { date?: unknown; kg?: unknown }
+            return !!w && typeof w === "object" && typeof w.date === "string" && DATE_RE.test(w.date) && typeof w.kg === "number" && isFinite(w.kg) && w.kg >= 25 && w.kg <= 400
+          })
+          .map((e) => ({ date: (e as { date: string }).date, kg: Math.round((e as { kg: number }).kg * 10) / 10 }))
+          .slice(0, 500)
+      : [],
   }
   return { date, data: out }
 }
@@ -73,6 +83,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ resource: s
 
   if (resource === "health") {
     return Response.json({ health: await db.getJson("health", user.id) })
+  }
+
+  if (resource === "weight") {
+    return Response.json({ weight: await db.getJson("weight", user.id) })
   }
 
   if (resource === "day") {
@@ -117,6 +131,23 @@ export async function PUT(request: Request, ctx: { params: Promise<{ resource: s
     const clean = sanitizeHealth(body?.health)
     if (!clean) return Response.json({ error: "Invalid health payload" }, { status: 400 })
     await db.putJson("health", user.id, clean)
+    return Response.json({ ok: true })
+  }
+
+  if (resource === "weight") {
+    const limit = rateLimit(`sync:weight:${user.id}`, 60, 60 * 1000)
+    if (!limit.ok) return Response.json({ error: "Too many requests" }, { status: 429 })
+
+    const body = (await request.json().catch(() => null)) as { weight?: unknown } | null
+    if (!body || !Array.isArray(body.weight)) return Response.json({ error: "Invalid weight payload" }, { status: 400 })
+    const clean = body.weight
+      .filter((e) => {
+        const w = e as { date?: unknown; kg?: unknown }
+        return !!w && typeof w === "object" && typeof w.date === "string" && DATE_RE.test(w.date) && typeof w.kg === "number" && isFinite(w.kg) && w.kg >= 25 && w.kg <= 400
+      })
+      .map((e) => ({ date: (e as { date: string }).date, kg: Math.round((e as { kg: number }).kg * 10) / 10 }))
+      .slice(0, 500)
+    await db.putJson("weight", user.id, clean)
     return Response.json({ ok: true })
   }
 

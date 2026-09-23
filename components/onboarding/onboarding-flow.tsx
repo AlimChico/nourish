@@ -141,6 +141,7 @@ export function OnboardingFlow() {
     units: "metric",
     waterGoal,
     stepGoal,
+    calorieOverride: null,
     notifications: true,
     diet,
     allergies: selectedAllergies,
