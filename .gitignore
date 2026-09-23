@@ -30,3 +30,7 @@ tsconfig.tsbuildinfo
 # pnpm artifacts (project uses npm)
 pnpm-lock.yaml
 pnpm-workspace.yaml
+
+# Local env (never commit)
+.env
+.env.local
