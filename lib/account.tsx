@@ -2,82 +2,20 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
 import { calcNutrition } from "@/lib/nutrition-data"
+import {
+  DEFAULT_ACCOUNT,
+  normalizeAccount,
+  type AccountState,
+  type OnboardingData,
+} from "@/lib/account-schema"
+import { useSync, useCloudPush } from "@/lib/sync"
 
-export type Gender = "male" | "female"
-export type Goal = "lose" | "maintain" | "gain"
-export type Units = "metric" | "imperial"
-
-export type AccountState = {
-  name: string
-  email: string
-  gender: Gender
-  age: number
-  height: number // cm
-  weight: number // kg
-  targetWeight: number // kg
-  activity: number // 1.2 .. 1.9
-  goal: Goal
-  units: Units
-  waterGoal: number // glasses / day
-  stepGoal: number // steps / day
-  notifications: boolean
-  diet: "none" | "vegetarian" | "vegan" | "pescatarian" | "halal"
-  allergies: string[]
-  onboarded: boolean
-}
-
-export type OnboardingData = Omit<AccountState, "onboarded">
-
-export const DEFAULT_ACCOUNT: AccountState = {
-  name: "",
-  email: "",
-  gender: "female",
-  age: 28,
-  height: 168,
-  weight: 72,
-  targetWeight: 65,
-  activity: 1.55,
-  goal: "lose",
-  units: "metric",
-  waterGoal: 8,
-  stepGoal: 10000,
-  notifications: true,
-  diet: "none",
-  allergies: [],
-  onboarded: false,
-}
+// Re-export the shared schema so existing imports keep working.
+export { DEFAULT_ACCOUNT, normalizeAccount }
+export type { AccountState, OnboardingData }
+export type { Gender, Goal, Units, Diet } from "@/lib/account-schema"
 
 const STORAGE_KEY = "nourish.account.v1"
-
-export function normalizeAccount(raw: unknown): AccountState {
-  if (!raw || typeof raw !== "object") return { ...DEFAULT_ACCOUNT }
-  const s = raw as Partial<AccountState>
-  return {
-    name: typeof s.name === "string" ? s.name : "",
-    email: typeof s.email === "string" ? s.email : "",
-    gender: s.gender === "male" ? "male" : "female",
-    age: clamp(Number(s.age) || DEFAULT_ACCOUNT.age, 14, 90),
-    height: clamp(Number(s.height) || DEFAULT_ACCOUNT.height, 120, 230),
-    weight: clamp(Number(s.weight) || DEFAULT_ACCOUNT.weight, 30, 250),
-    targetWeight: clamp(Number(s.targetWeight) || DEFAULT_ACCOUNT.targetWeight, 30, 250),
-    activity: Number(s.activity) || DEFAULT_ACCOUNT.activity,
-    goal: s.goal === "gain" ? "gain" : s.goal === "maintain" ? "maintain" : "lose",
-    units: s.units === "imperial" ? "imperial" : "metric",
-    waterGoal: clamp(Math.round(Number(s.waterGoal) || DEFAULT_ACCOUNT.waterGoal), 2, 20),
-    stepGoal: clamp(Math.round(Number(s.stepGoal) || DEFAULT_ACCOUNT.stepGoal), 1000, 50000),
-    notifications: typeof s.notifications === "boolean" ? s.notifications : true,
-    diet:
-      s.diet === "vegetarian" || s.diet === "vegan" || s.diet === "pescatarian" || s.diet === "halal"
-        ? s.diet
-        : "none",
-    allergies: Array.isArray(s.allergies) ? s.allergies.filter((x): x is string => typeof x === "string") : [],
-    onboarded: s.onboarded === true,
-  }
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, n))
-}
 
 /** Nutrition targets derived from the account (Mifflin-St Jeor via calcNutrition). */
 export function computeTargets(a: AccountState) {
@@ -108,7 +46,9 @@ const AccountContext = createContext<Store | null>(null)
 export function AccountProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AccountState>({ ...DEFAULT_ACCOUNT })
   const [hydrated, setHydrated] = useState(false)
+  const { status, restoredAccount, consumeRestoredAccount } = useSync()
 
+  // localStorage first — offline-first.
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY)
@@ -119,6 +59,13 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     setHydrated(true)
   }, [])
 
+  // Then, if the server sent back a saved account (login on a new device), restore it.
+  useEffect(() => {
+    if (!restoredAccount) return
+    setState(normalizeAccount(restoredAccount))
+    consumeRestoredAccount()
+  }, [restoredAccount, consumeRestoredAccount])
+
   useEffect(() => {
     if (!hydrated) return
     try {
@@ -127,6 +74,9 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       // storage unavailable — keep in-memory state
     }
   }, [state, hydrated])
+
+  // Mirror every account change to the SQLite backend (debounced, authed only).
+  useCloudPush("account", state, { authed: status === "authed", enabled: hydrated })
 
   const store = useMemo<Store>(
     () => ({
@@ -142,6 +92,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
           window.localStorage.removeItem(STORAGE_KEY)
           window.localStorage.removeItem("nourish.food-log.v1")
           window.localStorage.removeItem("nourish.premium.v1")
+          window.localStorage.removeItem("nourish.health.v1")
         } catch {
           // storage unavailable
         }

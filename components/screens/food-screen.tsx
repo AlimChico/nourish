@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Search, Plus, Clock, Flame, ScanLine, X, Check, Trash2 } from "lucide-react"
+import { Search, Plus, Clock, Flame, ScanLine, X, Check, Trash2, Camera } from "lucide-react"
 import {
   foodCategories,
   foodDatabase,
@@ -9,19 +9,23 @@ import {
   recentFoods,
   type FoodItem,
 } from "@/lib/nutrition-data"
+import { tunisianFoods, searchTunisianFoods } from "@/lib/tunisian-foods"
 import { mealMeta, useFoodLog, type MealKey } from "@/lib/food-log"
 import { targetForTime } from "@/lib/meal-scan"
 import { cn } from "@/lib/utils"
 
-export function FoodScreen({ onOpenScan }: { onOpenScan: () => void }) {
+export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => void; onOpenBarcode: () => void }) {
   const { state, addFood } = useFoodLog()
   const [query, setQuery] = useState("")
   const [pending, setPending] = useState<FoodItem[]>([])
   const [meal, setMeal] = useState<MealKey>(targetForTime)
 
   const results = useMemo(() => {
-    if (!query.trim()) return []
-    return foodDatabase.filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    const tn = searchTunisianFoods(q)
+    const general = foodDatabase.filter((f) => f.name.toLowerCase().includes(q))
+    return [...tn, ...general.filter((g) => !tn.some((t) => t.id === g.id))]
   }, [query])
 
   const queue = (food: FoodItem) => {
@@ -36,7 +40,7 @@ export function FoodScreen({ onOpenScan }: { onOpenScan: () => void }) {
   const pendingCals = pending.reduce((s, f) => s + f.calories, 0)
 
   return (
-    <div className="aurora-glow flex flex-col gap-6 px-5 pb-28 pt-2">
+    <div className="aurora-glow mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 pb-28 pt-2">
       <header>
         <h1 className="text-2xl font-extrabold tracking-tight">Add food</h1>
         <p className="text-sm text-muted-foreground">Search our database of 1M+ foods.</p>
@@ -60,11 +64,19 @@ export function FoodScreen({ onOpenScan }: { onOpenScan: () => void }) {
         </div>
         <button
           type="button"
-          onClick={onOpenScan}
-          aria-label="Scan a meal"
+          onClick={onOpenBarcode}
+          aria-label="Scan a barcode"
           className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground shadow-sm active:scale-95"
         >
           <ScanLine className="h-5 w-5 text-primary" />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenScan}
+          aria-label="Scan a meal photo"
+          className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground shadow-sm active:scale-95"
+        >
+          <Camera className="h-5 w-5 text-primary" />
         </button>
       </div>
 
@@ -82,7 +94,7 @@ export function FoodScreen({ onOpenScan }: { onOpenScan: () => void }) {
           {/* Categories */}
           <section>
             <SectionTitle>Categories</SectionTitle>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
               {foodCategories.map((c) => (
                 <button
                   key={c.id}
@@ -94,6 +106,21 @@ export function FoodScreen({ onOpenScan }: { onOpenScan: () => void }) {
                 </button>
               ))}
             </div>
+          </section>
+
+          {/* Tunisian specialties 🇹🇳 */}
+          <section>
+            <SectionTitle icon={<span className="text-base">🇹🇳</span>}>Spécialités tunisiennes</SectionTitle>
+            <div className="grid grid-cols-2 gap-2">
+              {tunisianFoods.slice(0, 8).map((f) => (
+                <TunisianCard key={f.id} food={f} added={pending.some((p) => p.id === f.id)} onToggle={() => queue(f)} />
+              ))}
+            </div>
+            {query && searchTunisianFoods(query).length > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                + {searchTunisianFoods(query).length} résultat(s) tunisien(s) dans les résultats ci-dessus
+              </p>
+            )}
           </section>
 
           {/* Recent */}
@@ -118,9 +145,9 @@ export function FoodScreen({ onOpenScan }: { onOpenScan: () => void }) {
         </>
       )}
 
-      {/* Sticky log bar */}
+      {/* Sticky log bar — sticks inside the scroll area, above the nav on every size */}
       {pending.length > 0 && (
-        <div className="fixed inset-x-0 bottom-24 z-20 mx-auto flex max-w-[430px] justify-center px-5">
+        <div className="sticky bottom-3 z-20 mx-auto flex w-full max-w-[600px] justify-center px-5">
           <div className="w-full rounded-3xl bg-secondary p-3 text-secondary-foreground shadow-2xl">
             <div className="mb-2 grid grid-cols-4 gap-2">
               {(Object.keys(mealMeta) as MealKey[]).map((key) => (
@@ -165,6 +192,29 @@ export function FoodScreen({ onOpenScan }: { onOpenScan: () => void }) {
           {mealMeta[meal].name}: {state.meals[meal].length} logged today
         </p>
       )}
+    </div>
+  )
+}
+
+function TunisianCard({ food, added, onToggle }: { food: FoodItem; added: boolean; onToggle: () => void }) {
+  return (
+    <div className="flex items-center gap-2 rounded-2xl bg-card p-3 shadow-sm">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-xl">{food.emoji}</span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-bold">{food.name}</p>
+        <p className="text-[11px] text-muted-foreground">{food.calories} kcal · P{food.protein} C{food.carbs} F{food.fat}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={added ? `Remove ${food.name}` : `Add ${food.name}`}
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all active:scale-90",
+          added ? "bg-primary text-primary-foreground" : "bg-accent text-primary",
+        )}
+      >
+        <Plus className={cn("h-4 w-4 transition-transform", added && "rotate-45")} strokeWidth={2.5} />
+      </button>
     </div>
   )
 }

@@ -11,7 +11,7 @@ export function WorkoutScreen() {
   const chartData = workoutHistory.map((w) => ({ day: w.day, value: w.minutes }))
 
   return (
-    <div className="aurora-glow flex flex-col gap-6 px-5 pb-8 pt-2">
+    <div className="aurora-glow mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 pb-8 pt-2">
       <header>
         <h1 className="text-2xl font-extrabold tracking-tight">Workouts</h1>
         <p className="text-sm text-muted-foreground">Move more, feel stronger.</p>

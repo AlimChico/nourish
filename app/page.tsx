@@ -12,17 +12,20 @@ import { ProfileScreen } from "@/components/screens/profile-screen"
 import { CalculatorScreen } from "@/components/screens/calculator-screen"
 import { PremiumScreen } from "@/components/screens/premium-screen"
 import { ScanMealScreen } from "@/components/screens/scan-meal-screen"
+import { BarcodeScannerScreen } from "@/components/screens/barcode-scanner-screen"
 import { SettingsScreen } from "@/components/screens/settings-screen"
 import { FoodLogProvider } from "@/lib/food-log"
 import { PremiumProvider } from "@/lib/premium"
 import { AccountProvider, useAccount } from "@/lib/account"
+import { SyncProvider, useSync } from "@/lib/sync"
 import { HealthProvider } from "@/lib/health"
 import { SmartNotificationsProvider } from "@/lib/notifications"
 
-type Overlay = "none" | "calculator" | "premium" | "scan" | "settings"
+type Overlay = "none" | "calculator" | "premium" | "scan" | "barcode" | "settings"
 
 function App() {
   const { state, hydrated, logout } = useAccount()
+  const { logout: serverLogout } = useSync()
   const [tab, setTab] = useState<TabKey>("home")
   const [overlay, setOverlay] = useState<Overlay>("none")
 
@@ -42,10 +45,11 @@ function App() {
         {tab === "home" && (
           <HomeScreen
             onAddFood={() => setTab("food")}
-            onOpenScan={() => setOverlay("scan")}
+            onOpenScan={() => setOverlay("barcode")}
+            onOpenSettings={() => setOverlay("settings")}
           />
         )}
-        {tab === "food" && <FoodScreen onOpenScan={() => setOverlay("scan")} />}
+        {tab === "food" && <FoodScreen onOpenScan={() => setOverlay("scan")} onOpenBarcode={() => setOverlay("barcode")} />}
         {tab === "progress" && <ProgressScreen />}
         {tab === "workout" && <WorkoutScreen />}
         {tab === "profile" && (
@@ -53,7 +57,10 @@ function App() {
             onOpenCalculator={() => setOverlay("calculator")}
             onOpenPremium={() => setOverlay("premium")}
             onOpenSettings={() => setOverlay("settings")}
-            onLogout={logout}
+            onLogout={() => {
+              logout()
+              void serverLogout()
+            }}
           />
         )}
       </main>
@@ -62,6 +69,7 @@ function App() {
       {overlay === "calculator" && <CalculatorScreen onClose={() => setOverlay("none")} />}
       {overlay === "premium" && <PremiumScreen onClose={() => setOverlay("none")} />}
       {overlay === "scan" && <ScanMealScreen onClose={() => setOverlay("none")} />}
+      {overlay === "barcode" && <BarcodeScannerScreen onClose={() => setOverlay("none")} />}
       {overlay === "settings" && <SettingsScreen onClose={() => setOverlay("none")} />}
     </MobileFrame>
   )
@@ -69,16 +77,18 @@ function App() {
 
 export default function Page() {
   return (
-    <AccountProvider>
-      <PremiumProvider>
-        <FoodLogProvider>
-          <HealthProvider>
-            <SmartNotificationsProvider>
-              <App />
-            </SmartNotificationsProvider>
-          </HealthProvider>
-        </FoodLogProvider>
-      </PremiumProvider>
-    </AccountProvider>
+    <SyncProvider>
+      <AccountProvider>
+        <PremiumProvider>
+          <FoodLogProvider>
+            <HealthProvider>
+              <SmartNotificationsProvider>
+                <App />
+              </SmartNotificationsProvider>
+            </HealthProvider>
+          </FoodLogProvider>
+        </PremiumProvider>
+      </AccountProvider>
+    </SyncProvider>
   )
 }

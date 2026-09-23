@@ -9,7 +9,7 @@ const manrope = Manrope({
 })
 
 export const metadata: Metadata = {
-  title: 'Nourish — Calorie & Nutrition Tracker',
+  title: 'Sahtek — Calorie & Nutrition Tracker',
   description:
     'Track your nutrition, reach your goals, and become a healthier version of yourself.',
   generator: 'v0.app',

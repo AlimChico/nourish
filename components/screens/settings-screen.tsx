@@ -19,6 +19,7 @@ import {
   Info,
 } from "lucide-react"
 import { useAccount, type Gender, type Goal } from "@/lib/account"
+import { useSync } from "@/lib/sync"
 import { useSmartNotifications } from "@/lib/notifications"
 import { activityLevels } from "@/lib/nutrition-data"
 import { useTheme } from "@/lib/use-theme"
@@ -53,6 +54,15 @@ const diets: { key: string; label: string; desc: string; emoji: string }[] = [
 
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const { state, update, targets, wipeAll } = useAccount()
+  const { status } = useSync()
+
+  const wipeEverything = async () => {
+    // Server first, then local mirrors.
+    if (status === "authed") {
+      await fetch("/api/sync/delete-all-data", { method: "POST" }).catch(() => {})
+    }
+    wipeAll()
+  }
   const { theme, toggle } = useTheme()
   const notif = useSmartNotifications()
   const [section, setSection] = useState<Section>("root")
@@ -163,7 +173,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
             </Group>
 
             <p className="text-center text-xs text-muted-foreground">
-              Nourish v1.2.0 · your data never leaves this device
+              Sahtek v2.0.0 · your data never leaves this device
             </p>
           </div>
         )}
@@ -187,11 +197,12 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
             <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
               <p className="flex items-center gap-2 font-bold text-foreground">
                 <Info className="h-4 w-4 text-primary" />
-                Local-first
+                Secure sync
               </p>
               <p className="mt-2">
-                Your account, journal and preferences are stored only in this browser (localStorage). Deleting the app
-                data removes everything permanently.
+                Your account, journal and history are stored in this browser <em>and</em> synced to your private,
+                password-protected database (sessions expire, passwords are hashed). Deleting the app data removes
+                everything permanently, here and on the server.
               </p>
             </div>
             {!confirmWipe ? (
@@ -216,7 +227,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                   </button>
                   <button
                     type="button"
-                    onClick={wipeAll}
+                    onClick={() => void wipeEverything()}
                     className="rounded-xl bg-destructive py-2.5 text-sm font-bold text-[#e6fff1]"
                   >
                     Erase
@@ -326,7 +337,7 @@ function AccountSection() {
         type="email"
       />
       <div className="rounded-2xl bg-card p-4 text-xs text-muted-foreground">
-        Signed in locally on this device. Nourish keeps everything offline.
+        Signed in locally on this device. Sahtek keeps everything offline.
       </div>
     </div>
   )

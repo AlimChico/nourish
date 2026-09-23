@@ -23,3 +23,6 @@ node_modules
 # Build artifacts
 tsconfig.tsbuildinfo
 *.tsbuildinfo
+
+# SQLite database (user data — never commit)
+.data/

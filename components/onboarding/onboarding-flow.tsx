@@ -27,6 +27,7 @@ import {
 import { AnimatedCounter } from "@/components/animated-counter"
 import { activityLevels, calcNutrition } from "@/lib/nutrition-data"
 import { useAccount, type Gender, type Goal, type OnboardingData } from "@/lib/account"
+import { useSync } from "@/lib/sync"
 import { useFoodLog } from "@/lib/food-log"
 import { cn } from "@/lib/utils"
 
@@ -61,7 +62,10 @@ const goals: { key: Goal; label: string; desc: string; icon: typeof TrendingDown
 export function OnboardingFlow() {
   const { state: saved, update, markOnboarded } = useAccount()
   const { resetDay } = useFoodLog()
+  const { signup, login, user } = useSync()
   const [step, setStep] = useState(0)
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
 
   // Account
   const [name, setName] = useState(saved.name)
@@ -116,12 +120,35 @@ export function OnboardingFlow() {
     allergies: selectedAllergies,
   })
 
-  /** Save everything the user entered, reset the daily journal, then celebrate. */
-  const createAccount = () => {
-    if (!accountOk) return
+  /** Save everything the user entered, create the server account, reset the journal, then celebrate. */
+  const createAccount = async () => {
+    if (!accountOk || authBusy) return
+    setAuthBusy(true)
+    setAuthError(null)
+    // Create the real server account (SQLite); fall back to local-only if unavailable.
+    let serverOk = true
+    if (!user) {
+      const r = await signup(name.trim(), email.trim(), password)
+      if (!r.ok) {
+        // Already an account? Try signing in — the profile data still syncs.
+        const retry = await login(email.trim(), password)
+        if (!retry.ok) {
+          setAuthBusy(false)
+          setAuthError(r.error === "network" ? "Server unreachable — account kept on this device only." : r.error ?? "Signup failed")
+          return
+        }
+      }
+    }
+    serverOk = true
     update(buildData()) // persisted — onboarded stays false until the celebration ends
     resetDay() // calorie counter starts at 0 on the new account's day one
+    setAuthBusy(false)
     setStep(STEPS - 1)
+    if (serverOk && navigator.onLine) void fetch("/api/sync/account", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ account: { ...buildData(), onboarded: false } }),
+    })
   }
 
   return (
@@ -231,10 +258,11 @@ export function OnboardingFlow() {
           <button
             type="button"
             onClick={step === 9 ? createAccount : next}
-            disabled={step === 9 && !accountOk}
+            disabled={(step === 9 && !accountOk) || (step === 9 && authBusy)}
             className={cn(
               "flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.98]",
               step === 9 && !accountOk && "opacity-40",
+              step === 9 && authBusy && "opacity-60",
             )}
           >
             {step === 0
@@ -242,10 +270,15 @@ export function OnboardingFlow() {
               : step === 8
                 ? "Save my program"
                 : step === 9
-                  ? "Create my account"
+                  ? authBusy
+                    ? "Creating…"
+                    : "Create my account"
                   : "Continue"}
             <ArrowRight className="h-5 w-5" />
           </button>
+          {step === 9 && authError && (
+            <p className="mt-2 text-center text-sm font-semibold text-destructive">{authError}</p>
+          )}
           {step === 0 && (
             <button
               type="button"
@@ -277,7 +310,7 @@ function WelcomeStep() {
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
           <Leaf className="h-4 w-4" />
         </span>
-        <span className="text-lg font-extrabold tracking-tight">Nourish</span>
+        <span className="text-lg font-extrabold tracking-tight">Sahtek</span>
       </div>
       <h1 className="mt-4 text-balance text-4xl font-extrabold leading-[1.1] tracking-tight">
         Your health journey starts here

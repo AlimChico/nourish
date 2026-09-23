@@ -14,9 +14,11 @@ import { cn } from "@/lib/utils"
 export function HomeScreen({
   onAddFood,
   onOpenScan,
+  onOpenSettings,
 }: {
   onAddFood: (meal?: MealKey) => void
   onOpenScan: () => void
+  onOpenSettings: () => void
 }) {
   const { state, addWater } = useFoodLog()
   const { state: account, targets } = useAccount()
@@ -27,20 +29,27 @@ export function HomeScreen({
   const totals = useMemo(() => dayTotals(state.meals), [state.meals])
   const remaining = Math.max(targets.calories - totals.calories, 0)
   const firstName = account.name.trim().split(/\s+/)[0] ?? ""
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
 
   return (
-    <div className="aurora-glow flex flex-col gap-6 px-5 pb-8 pt-2">
+    <div className="aurora-glow mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 pb-8 pt-2">
       {/* Greeting */}
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">
-            Good morning{firstName ? `, ${firstName}` : ""} 👋
+            {greeting}{firstName ? `, ${firstName}` : ""} 👋
           </h1>
           <p className="text-sm text-muted-foreground">Let&apos;s reach your goal today.</p>
         </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-sm font-bold text-primary-foreground">
-          AM
-        </div>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          aria-label="Open settings"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-sm font-bold text-primary-foreground transition-transform active:scale-90"
+        >
+          {firstName ? firstName.slice(0, 2).toUpperCase() : "SA"}
+        </button>
       </header>
 
       {/* Calorie ring card */}
@@ -68,11 +77,11 @@ export function HomeScreen({
       </section>
 
       {/* Add food + scan */}
-      <div className="grid grid-cols-[1fr_auto] gap-3">
+      <div className="grid grid-cols-[1fr_auto] gap-3 md:grid-cols-2 md:px-16">
         <button
           type="button"
           onClick={() => onAddFood()}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.98]"
+          className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.98] md:col-start-1 md:col-end-2"
         >
           <Plus className="h-5 w-5" strokeWidth={2.5} />
           Add food
@@ -91,8 +100,8 @@ export function HomeScreen({
       {/* Streak banner */}
       <StreakBanner streak={streak} hasLoggedToday={Object.values(state.meals).some((m) => m.length > 0)} />
 
-      {/* Quick trackers */}
-      <section className="grid grid-cols-3 gap-3">
+      {/* Quick trackers — 3-up phone, wide row tablet */}
+      <section className="grid grid-cols-3 gap-3 md:gap-4">
         <TrackerCard
           icon="👣"
           label="Steps"
@@ -212,15 +221,6 @@ export function HomeScreen({
         </div>
       </section>
 
-      {/* Encouragement */}
-      <section className="flex items-center gap-3 rounded-2xl bg-accent p-4">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          🎉
-        </span>
-        <p className="text-sm font-medium text-accent-foreground">
-          You&apos;re on a <span className="font-extrabold">5-day streak</span>. Keep it going by logging dinner!
-        </p>
-      </section>
     </div>
   )
 }

@@ -95,7 +95,7 @@ export function PremiumScreen({ onClose }: { onClose: () => void }) {
             <Crown className="h-5 w-5" />
           </span>
           <h1 className="text-lg font-extrabold tracking-tight">
-            {step === "manage" ? "Manage subscription" : step === "checkout" ? "Payment" : "Nourish Premium"}
+            {step === "manage" ? "Manage subscription" : step === "checkout" ? "Payment" : "Sahtek Premium"}
           </h1>
         </div>
         <button

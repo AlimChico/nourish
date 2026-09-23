@@ -15,8 +15,12 @@ const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
 
 export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab: TabKey) => void }) {
   return (
-    <nav className="border-t border-border bg-card/95 px-2 pb-6 pt-2 backdrop-blur">
-      <div className="flex items-center justify-around">
+    <nav
+      className="sticky bottom-0 z-30 w-full shrink-0 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+      aria-label="Main navigation"
+    >
+      {/* max-w + mx-auto keeps the 5 tabs centered and even on wide screens */}
+      <div className="mx-auto flex w-full max-w-lg items-stretch px-2 pt-1.5">
         {tabs.map((t) => {
           const Icon = t.icon
           const isActive = active === t.key
@@ -25,12 +29,12 @@ export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab
               key={t.key}
               type="button"
               onClick={() => onChange(t.key)}
-              className="flex flex-1 flex-col items-center gap-1 py-1"
+              className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl py-1.5 active:scale-95"
               aria-current={isActive ? "page" : undefined}
             >
               <span
                 className={cn(
-                  "flex h-9 w-12 items-center justify-center rounded-full transition-colors",
+                  "flex h-9 w-14 items-center justify-center rounded-full transition-colors",
                   isActive && "bg-accent",
                 )}
               >
@@ -39,7 +43,12 @@ export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab
                   strokeWidth={isActive ? 2.5 : 2}
                 />
               </span>
-              <span className={cn("text-[10px] font-semibold", isActive ? "text-primary" : "text-muted-foreground")}>
+              <span
+                className={cn(
+                  "truncate text-[10px] font-semibold leading-none",
+                  isActive ? "text-primary" : "text-muted-foreground",
+                )}
+              >
                 {t.label}
               </span>
             </button>

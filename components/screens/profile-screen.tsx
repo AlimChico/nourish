@@ -38,7 +38,7 @@ export function ProfileScreen({
   const initials = initialsOf(account.name)
 
   return (
-    <div className="aurora-glow flex flex-col gap-6 px-5 pb-8 pt-2">
+    <div className="aurora-glow mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 pb-8 pt-2">
       {/* Profile header */}
       <header className="flex items-center gap-4">
         <div className="relative">
@@ -166,7 +166,7 @@ export function ProfileScreen({
         Log out
       </button>
 
-      <p className="text-center text-xs text-muted-foreground">Nourish v1.1.0</p>
+      <p className="text-center text-xs text-muted-foreground">Sahtek v2.0.0</p>
     </div>
   )
 }

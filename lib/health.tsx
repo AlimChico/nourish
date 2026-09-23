@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
+import { useSync, useCloudPush } from "@/lib/sync"
 
 /**
  * Health tracking: daily steps + workout minutes.
@@ -96,6 +97,10 @@ export function HealthProvider({ children }: { children: React.ReactNode }) {
       // storage unavailable
     }
   }, [state, hydrated])
+
+  // Mirror steps/workouts to the SQLite backend (debounced, authed only).
+  const { status } = useSync()
+  useCloudPush("health", state, { authed: status === "authed", enabled: hydrated })
 
   const mutateToday = (fn: (day: HealthDay) => HealthDay) => {
     setState((s) => {

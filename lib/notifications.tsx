@@ -137,7 +137,7 @@ export function SmartNotificationsProvider({ children }: { children: React.React
     const res = await Notification.requestPermission()
     setPermission(res)
     if (res === "granted") {
-      new Notification("Nourish notifications on 🔔", {
+      new Notification("Sahtek notifications on 🔔", {
         body: "We'll nudge you to keep your streak and reach your goal.",
       })
     }

@@ -1,5 +1,7 @@
 export const maxDuration = 60
 
+import { rateLimit, clientIp } from "@/lib/server/db"
+
 type DetectedFood = {
   name: string
   portion: string
@@ -123,6 +125,15 @@ function normalizeItem(raw: unknown): DetectedFood | null {
 }
 
 export async function POST(request: Request) {
+  // Abuse guard: vision calls are expensive
+  const limit = rateLimit(`scan:${clientIp(request)}`, 10, 60 * 1000)
+  if (!limit.ok) {
+    return Response.json(
+      { ...buildDemoResult(), error: "Too many scans — wait a minute." } satisfies ScanResponse,
+      { status: 429 },
+    )
+  }
+
   let imageDataUrl = ""
   try {
     const body = (await request.json()) as { image?: string }

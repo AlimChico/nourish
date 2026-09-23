@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react"
+import { useSync, useCloudPush } from "@/lib/sync"
 
 export type MacroKey = "protein" | "carbs" | "fat"
 
@@ -261,6 +262,10 @@ export function FoodLogProvider({ children }: { children: React.ReactNode }) {
       // storage unavailable — keep in-memory state
     }
   }, [state, hydrated])
+
+  // Mirror the journal to the SQLite backend (debounced, authed only).
+  const { status } = useSync()
+  useCloudPush("day", state, { authed: status === "authed", enabled: hydrated })
 
   const store = useMemo<Store>(
     () => ({
