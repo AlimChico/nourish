@@ -26,3 +26,7 @@ tsconfig.tsbuildinfo
 
 # SQLite database (user data — never commit)
 .data/
+
+# pnpm artifacts (project uses npm)
+pnpm-lock.yaml
+pnpm-workspace.yaml

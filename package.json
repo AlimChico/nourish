@@ -1,8 +1,10 @@
 {
-  "name": "my-project",
-  "version": "0.1.0",
+  "name": "sahtek",
+  "version": "2.0.0",
   "private": true,
-  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
