@@ -228,6 +228,14 @@ export const db = {
     sqlite!.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId)
   },
 
+  async updateUserPassword(userId: string, passwordHash: string): Promise<void> {
+    if (usingPostgres) {
+      await sql`UPDATE users SET password = ${passwordHash} WHERE id = ${userId}`
+      return
+    }
+    sqlite!.prepare("UPDATE users SET password = ? WHERE id = ?").run(passwordHash, userId)
+  },
+
   async deleteUser(userId: string): Promise<void> {
     if (usingPostgres) {
       await sql`DELETE FROM users WHERE id = ${userId}`

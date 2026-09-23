@@ -23,6 +23,7 @@ import {
   Droplets,
   Footprints,
   PartyPopper,
+  KeyRound,
 } from "lucide-react"
 import { AnimatedCounter } from "@/components/animated-counter"
 import { activityLevels, calcNutrition } from "@/lib/nutrition-data"
@@ -69,6 +70,8 @@ export function OnboardingFlow() {
   const [authError, setAuthError] = useState<string | null>(null)
   // "I already have an account" → dedicated login form instead of silently skipping.
   const [loginMode, setLoginMode] = useState(false)
+  const [resetMode, setResetMode] = useState(false)
+  const [resetDone, setResetDone] = useState(false)
   const [loginEmail, setLoginEmail] = useState("")
   const [loginPassword, setLoginPassword] = useState("")
 
@@ -224,7 +227,7 @@ export function OnboardingFlow() {
 
       <div className="flex flex-1 flex-col overflow-y-auto no-scrollbar px-6 pb-8">
         {step === 0 && !loginMode && <WelcomeStep />}
-        {step === 0 && loginMode && (
+        {step === 0 && loginMode && !resetMode && (
           <LoginStep
             email={loginEmail}
             setEmail={setLoginEmail}
@@ -237,6 +240,19 @@ export function OnboardingFlow() {
             onSubmit={signInExisting}
             busy={authBusy}
             error={authError}
+            onForgot={() => {
+              setResetMode(true)
+              setAuthError(null)
+            }}
+          />
+        )}
+        {step === 0 && resetMode && (
+          <ResetStep
+            onBack={() => {
+              setResetMode(false)
+              setResetDone(false)
+              setAuthError(null)
+            }}
           />
         )}
         {step === 1 && <GoalStep goal={goal} setGoal={setGoal} />}
@@ -306,7 +322,7 @@ export function OnboardingFlow() {
 
       {step <= 9 && (
         <div className="px-6 pb-8 pt-2">
-          {step === 0 && loginMode && (
+          {step === 0 && loginMode && !resetMode && (
             <button
               type="button"
               onClick={signInExisting}
@@ -1051,6 +1067,7 @@ function LoginStep({
   onSubmit,
   busy,
   error,
+  onForgot,
 }: {
   email: string
   setEmail: (v: string) => void
@@ -1060,6 +1077,7 @@ function LoginStep({
   onSubmit: () => void
   busy: boolean
   error: string | null
+  onForgot: () => void
 }) {
   const [show, setShow] = useState(false)
   return (
@@ -1106,8 +1124,136 @@ function LoginStep({
           </button>
         </label>
         {error && <p className="text-sm font-semibold text-destructive">{error}</p>}
+      </div>        {busy && <p className="mt-4 animate-pulse text-sm text-muted-foreground">Checking your account…</p>}
+
+      <button
+        type="button"
+        onClick={onForgot}
+        className="mt-6 w-fit text-sm font-semibold text-primary"
+      >
+        Forgot password?
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Hidden-admin password reset — mirrors /api/auth/admin-reset-password.
+ * Works only when ADMIN_EMAIL / ADMIN_KEY env vars are configured on the server.
+ */
+function ResetStep({ onBack }: { onBack: () => void }) {
+  const [adminEmail, setAdminEmail] = useState("")
+  const [adminKey, setAdminKey] = useState("")
+  const [userEmail, setUserEmail] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/auth/admin-reset-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ adminEmail, adminKey, userEmail, newPassword }),
+      })
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; name?: string; error?: string } | null
+      if (res.ok && data?.ok) {
+        setDone(data.name ?? userEmail)
+      } else {
+        setError(data?.error ?? "Reset failed")
+      }
+    } catch {
+      setError("Network error — try again")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="flex flex-1 flex-col animate-slide-up">
+        <button type="button" onClick={onBack} className="mb-2 flex w-fit items-center gap-1 text-sm font-semibold text-muted-foreground">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </button>
+        <h1 className="text-3xl font-extrabold tracking-tight">Password reset ✅</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          The password for <b>{done}</b> has been changed. All their sessions were logged out. They can now log in with the new password.
+        </p>
       </div>
-      {busy && <p className="mt-4 animate-pulse text-sm text-muted-foreground">Checking your account…</p>}
+    )
+  }
+
+  const ok = adminEmail.length > 3 && adminKey.length > 0 && userEmail.length > 3 && newPassword.length >= 8
+
+  return (
+    <div className="flex flex-1 flex-col animate-slide-up">
+      <button type="button" onClick={onBack} className="mb-2 flex w-fit items-center gap-1 text-sm font-semibold text-muted-foreground">
+        <ArrowLeft className="h-4 w-4" /> Back
+      </button>
+      <h1 className="text-3xl font-extrabold tracking-tight">Reset a password 🔑</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Admin access only. Enter your admin credentials and the user&apos;s email to set a new password.
+      </p>
+
+      <div className="mt-6 flex flex-col gap-3">
+        <label className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-sm">
+          <Mail className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <input
+            type="email"
+            value={adminEmail}
+            onChange={(e) => setAdminEmail(e.target.value)}
+            placeholder="Admin email"
+            autoComplete="off"
+            className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground"
+          />
+        </label>
+        <label className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-sm">
+          <KeyRound className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <input
+            type="password"
+            value={adminKey}
+            onChange={(e) => setAdminKey(e.target.value)}
+            placeholder="Admin key"
+            autoComplete="off"
+            className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground"
+          />
+        </label>
+        <label className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-sm">
+          <Mail className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <input
+            type="email"
+            value={userEmail}
+            onChange={(e) => setUserEmail(e.target.value)}
+            placeholder="User's email to reset"
+            autoComplete="off"
+            className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground"
+          />
+        </label>
+        <label className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-sm">
+          <Lock className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <input
+            type="text"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="New password (min 8 chars)"
+            autoComplete="off"
+            className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground"
+          />
+        </label>
+        {error && <p className="text-sm font-semibold text-destructive">{error}</p>}
+      </div>
+      {busy && <p className="mt-4 animate-pulse text-sm text-muted-foreground">Resetting…</p>}
+      <button
+        type="button"
+        onClick={() => void submit()}
+        disabled={!ok || busy}
+        className={cn("mt-6 flex w-fit items-center justify-center gap-2 rounded-2xl bg-primary px-8 py-4 text-base font-bold text-primary-foreground transition-transform active:scale-[0.98]", (!ok || busy) && "opacity-40")}
+      >
+        Reset password
+      </button>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import {
   verifyPassword,
   createSession,
   destroySessionByToken,
+  destroyAllUserSessions,
   getSessionUserFromToken,
   rateLimit,
   clientIp,
@@ -82,6 +83,40 @@ export async function POST(request: Request, ctx: { params: Promise<{ action: st
     if (action === "logout") {
       await destroySessionByToken(parseCookie(request.headers.get("cookie") ?? "", SESSION_COOKIE))
       return Response.json({ ok: true }, { headers: { "Set-Cookie": clearCookie() } })
+    }
+
+    if (action === "admin-reset-password") {
+      // Hidden admin mode: only works when ADMIN_EMAIL + ADMIN_KEY env vars are set.
+      const adminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase()
+      const adminKey = process.env.ADMIN_KEY || ""
+      if (!adminEmail || !adminKey) return Response.json({ error: "Admin mode disabled" }, { status: 404 })
+
+      const limit = rateLimit(`admin-reset:${ip}`, 5, 60 * 60 * 1000)
+      if (!limit.ok) return Response.json({ error: "Too many attempts. Try again later." }, { status: 429 })
+
+      const body = (await request.json().catch(() => null)) as {
+        adminEmail?: string
+        adminKey?: string
+        userEmail?: string
+        newPassword?: string
+      } | null
+      const aEmail = typeof body?.adminEmail === "string" ? body.adminEmail.trim().toLowerCase() : ""
+      const aKey = typeof body?.adminKey === "string" ? body.adminKey : ""
+      const uEmail = typeof body?.userEmail === "string" ? body.userEmail.trim().toLowerCase() : ""
+      const newPassword = typeof body?.newPassword === "string" ? body.newPassword : ""
+
+      // Timing-safe-ish checks: exact match required, errors are generic.
+      if (aEmail !== adminEmail || aKey !== adminKey) return Response.json({ error: "Invalid admin credentials." }, { status: 401 })
+      if (!EMAIL_RE.test(uEmail)) return Response.json({ error: "Invalid user email." }, { status: 400 })
+      if (newPassword.length < 8 || newPassword.length > 200) return Response.json({ error: "Password must be at least 8 characters." }, { status: 400 })
+
+      const user = await db.findUserByEmail(uEmail)
+      if (!user) return Response.json({ error: "No account with this email." }, { status: 404 })
+
+      const hash = await hashPassword(newPassword)
+      await db.updateUserPassword(user.id, hash)
+      await destroyAllUserSessions(user.id) // kick out stolen sessions too
+      return Response.json({ ok: true, name: user.name })
     }
 
     return Response.json({ error: "Unknown action" }, { status: 404 })
