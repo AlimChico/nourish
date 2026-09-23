@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Image from "next/image"
 import {
   ArrowRight,
   ArrowLeft,
@@ -427,23 +426,14 @@ function NotificationsStep({ onEnter, name }: { onEnter: () => void; name: strin
 
 function WelcomeStep() {
   return (
-    <div className="flex flex-1 flex-col animate-slide-up">
-      <div className="relative mx-auto mt-2 aspect-square w-full max-w-[300px] overflow-hidden rounded-[2rem] bg-accent">
-        <Image
-          src="/images/onboarding-hero.png"
-          alt="A person enjoying fresh healthy food"
-          fill
-          className="object-cover"
-          priority
-        />
-      </div>
+    <div className="flex flex-1 flex-col justify-center animate-slide-up">
       <div className="mt-8 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Leaf className="h-4 w-4" />
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <Leaf className="h-4.5 w-4.5" />
         </span>
-        <span className="text-lg font-extrabold tracking-tight">Sahtek</span>
+        <span className="text-xl font-extrabold tracking-tight">Sahtek</span>
       </div>
-      <h1 className="mt-4 text-balance text-4xl font-extrabold leading-[1.1] tracking-tight">
+      <h1 className="mt-6 text-balance text-4xl font-extrabold leading-[1.1] tracking-tight">
         Your health journey starts here
       </h1>
       <p className="mt-4 text-pretty text-base leading-relaxed text-muted-foreground">
