@@ -22,7 +22,7 @@ export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab
     <div className="pointer-events-none sticky bottom-0 z-30 w-full px-3 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-2">
       <nav
         aria-label="Main navigation"
-        className="pointer-events-auto mx-auto flex w-full max-w-md items-stretch rounded-[1.55rem] border border-white/[0.06] bg-[#0c1611]/80 shadow-[0_10px_32px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+        className="pointer-events-auto mx-auto flex w-full max-w-md items-stretch rounded-[1.55rem] border border-[#a7f3d0]/15 bg-[#0d1a13]/90 shadow-[0_10px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(167,243,208,0.07)] backdrop-blur-xl"
       >
         {tabs.map((t) => {
           const Icon = t.icon
