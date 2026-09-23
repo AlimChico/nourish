@@ -14,6 +14,8 @@ import { PremiumScreen } from "@/components/screens/premium-screen"
 import { ScanMealScreen } from "@/components/screens/scan-meal-screen"
 import { BarcodeScannerScreen } from "@/components/screens/barcode-scanner-screen"
 import { SettingsScreen } from "@/components/screens/settings-screen"
+import { CommunityScreen, CommunityFoodLogBridge } from "@/components/screens/community-screen"
+import { InstallPrompt } from "@/components/install-prompt"
 import { FoodLogProvider } from "@/lib/food-log"
 import { PremiumProvider } from "@/lib/premium"
 import { AccountProvider, useAccount } from "@/lib/account"
@@ -22,7 +24,7 @@ import { HealthProvider } from "@/lib/health"
 import { SmartNotificationsProvider } from "@/lib/notifications"
 import { WeightProvider } from "@/lib/weight"
 
-type Overlay = "none" | "calculator" | "premium" | "scan" | "barcode" | "settings"
+type Overlay = "none" | "calculator" | "premium" | "scan" | "barcode" | "settings" | "community"
 
 function App() {
   const { state, hydrated, logout } = useAccount()
@@ -43,6 +45,7 @@ function App() {
   return (
     <MobileFrame>
       <main key={tab} className="flex-1 overflow-y-auto no-scrollbar animate-slide-up">
+        <CommunityFoodLogBridge />
         {tab === "home" && (
           <HomeScreen
             onAddFood={() => setTab("food")}
@@ -57,6 +60,7 @@ function App() {
           <ProfileScreen
             onOpenCalculator={() => setOverlay("calculator")}
             onOpenPremium={() => setOverlay("premium")}
+            onOpenCommunity={() => setOverlay("community")}
             onOpenSettings={() => setOverlay("settings")}
             onLogout={() => {
               logout()
@@ -66,12 +70,14 @@ function App() {
         )}
       </main>
       <BottomNav active={tab} onChange={setTab} />
+      <InstallPrompt />
 
       {overlay === "calculator" && <CalculatorScreen onClose={() => setOverlay("none")} />}
       {overlay === "premium" && <PremiumScreen onClose={() => setOverlay("none")} />}
       {overlay === "scan" && <ScanMealScreen onClose={() => setOverlay("none")} />}
       {overlay === "barcode" && <BarcodeScannerScreen onClose={() => setOverlay("none")} />}
       {overlay === "settings" && <SettingsScreen onClose={() => setOverlay("none")} />}
+      {overlay === "community" && <CommunityScreen onClose={() => setOverlay("none")} />}
     </MobileFrame>
   )
 }

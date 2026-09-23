@@ -109,6 +109,40 @@ async function makePostgres(url: string) {
   await sql`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_scans_user_date ON scans(user_id, date)`
   await sql`CREATE INDEX IF NOT EXISTS idx_events_user_date ON events(user_id, date)`
+  await sql`CREATE TABLE IF NOT EXISTS premium_codes (
+    code TEXT PRIMARY KEY,
+    months INT NOT NULL,
+    max_uses INT NOT NULL DEFAULT 1,
+    uses INT NOT NULL DEFAULT 0,
+    created_at BIGINT NOT NULL
+  )`
+  await sql`CREATE TABLE IF NOT EXISTS community_recipes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    author_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    calories INT NOT NULL,
+    protein INT NOT NULL,
+    carbs INT NOT NULL,
+    fat INT NOT NULL,
+    emoji TEXT NOT NULL DEFAULT '🥗',
+    created_at BIGINT NOT NULL
+  )`
+  await sql`CREATE TABLE IF NOT EXISTS challenge_joins (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    challenge_key TEXT NOT NULL,
+    joined_at BIGINT NOT NULL,
+    PRIMARY KEY (user_id, challenge_key)
+  )`
+  await sql`CREATE TABLE IF NOT EXISTS challenge_progress (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    challenge_key TEXT NOT NULL,
+    points INT NOT NULL DEFAULT 0,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (user_id, challenge_key)
+  )`
+  await sql`CREATE INDEX IF NOT EXISTS idx_recipes_created ON community_recipes(created_at DESC)`
   return sql
 }
 
@@ -179,6 +213,25 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_scans_user_date ON scans(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_events_user_date ON events(user_id, date);
+CREATE TABLE IF NOT EXISTS premium_codes (
+  code TEXT PRIMARY KEY, months INTEGER NOT NULL, max_uses INTEGER NOT NULL DEFAULT 1,
+  uses INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS community_recipes (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  author_name TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL,
+  calories INTEGER NOT NULL, protein INTEGER NOT NULL, carbs INTEGER NOT NULL, fat INTEGER NOT NULL,
+  emoji TEXT NOT NULL DEFAULT '🥗', created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS challenge_joins (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, challenge_key TEXT NOT NULL,
+  joined_at INTEGER NOT NULL, PRIMARY KEY (user_id, challenge_key)
+);
+CREATE TABLE IF NOT EXISTS challenge_progress (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, challenge_key TEXT NOT NULL,
+  points INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, challenge_key)
+);
+CREATE INDEX IF NOT EXISTS idx_recipes_created ON community_recipes(created_at DESC);
 `)
 }
 
@@ -413,6 +466,139 @@ export const db = {
       created_at: number
     }[]
     return rows.map((r) => ({ id: r.id, date: r.date, dish: r.dish, result: JSON.parse(r.result), createdAt: r.created_at }))
+  },
+
+  // ----- community recipes -----
+
+  async listRecipes(limit = 60): Promise<{ id: string; userId: string; authorName: string; title: string; description: string; calories: number; protein: number; carbs: number; fat: number; emoji: string; createdAt: number }[]> {
+    if (usingPostgres) {
+      const rows = (await sql`SELECT id, user_id, author_name, title, description, calories, protein, carbs, fat, emoji, created_at
+        FROM community_recipes ORDER BY created_at DESC LIMIT ${limit}`) as unknown as Record<string, unknown>[]
+      return rows.map((r) => ({
+        id: r.id as string, userId: r.user_id as string, authorName: r.author_name as string, title: r.title as string,
+        description: r.description as string, calories: Number(r.calories), protein: Number(r.protein), carbs: Number(r.carbs),
+        fat: Number(r.fat), emoji: (r.emoji as string) || "🥗", createdAt: Number(r.created_at),
+      }))
+    }
+    const rows = sqlite!.prepare("SELECT id, user_id, author_name, title, description, calories, protein, carbs, fat, emoji, created_at FROM community_recipes ORDER BY created_at DESC LIMIT ?").all(limit) as Record<string, unknown>[]
+    return rows.map((r) => ({
+      id: r.id as string, userId: r.user_id as string, authorName: r.author_name as string, title: r.title as string,
+      description: r.description as string, calories: Number(r.calories), protein: Number(r.protein), carbs: Number(r.carbs),
+      fat: Number(r.fat), emoji: (r.emoji as string) || "🥗", createdAt: Number(r.created_at),
+    }))
+  },
+
+  async insertRecipe(r: { id: string; userId: string; authorName: string; title: string; description: string; calories: number; protein: number; carbs: number; fat: number; emoji: string }): Promise<void> {
+    const now = Date.now()
+    if (usingPostgres) {
+      await sql`INSERT INTO community_recipes (id, user_id, author_name, title, description, calories, protein, carbs, fat, emoji, created_at)
+        VALUES (${r.id}, ${r.userId}, ${r.authorName}, ${r.title}, ${r.description}, ${r.calories}, ${r.protein}, ${r.carbs}, ${r.fat}, ${r.emoji}, ${now})`
+      return
+    }
+    sqlite!.prepare("INSERT INTO community_recipes (id, user_id, author_name, title, description, calories, protein, carbs, fat, emoji, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      r.id, r.userId, r.authorName, r.title, r.description, r.calories, r.protein, r.carbs, r.fat, r.emoji, now,
+    )
+  },
+
+  async deleteRecipeIfOwner(id: string, userId: string): Promise<boolean> {
+    if (usingPostgres) {
+      const rows = (await sql`DELETE FROM community_recipes WHERE id = ${id} AND user_id = ${userId} RETURNING id`) as unknown as { id: string }[]
+      return rows.length > 0
+    }
+    const res = sqlite!.prepare("DELETE FROM community_recipes WHERE id = ? AND user_id = ?").run(id, userId)
+    return Number(res.changes) > 0
+  },
+
+  // ----- challenges (join + points) -----
+
+  async joinChallenge(userId: string, challengeKey: string): Promise<void> {
+    const now = Date.now()
+    if (usingPostgres) {
+      await sql`INSERT INTO challenge_joins (user_id, challenge_key, joined_at) VALUES (${userId}, ${challengeKey}, ${now})
+        ON CONFLICT (user_id, challenge_key) DO NOTHING`
+      return
+    }
+    sqlite!.prepare("INSERT OR IGNORE INTO challenge_joins (user_id, challenge_key, joined_at) VALUES (?, ?, ?)").run(userId, challengeKey, now)
+  },
+
+  async addChallengePoints(userId: string, challengeKey: string, points: number): Promise<void> {
+    const now = Date.now()
+    if (usingPostgres) {
+      await sql`INSERT INTO challenge_progress (user_id, challenge_key, points, updated_at) VALUES (${userId}, ${challengeKey}, ${points}, ${now})
+        ON CONFLICT (user_id, challenge_key) DO UPDATE SET points = challenge_progress.points + EXCLUDED.points, updated_at = EXCLUDED.updated_at`
+      return
+    }
+    sqlite!.prepare(
+      "INSERT INTO challenge_progress (user_id, challenge_key, points, updated_at) VALUES (?, ?, ?, ?) " +
+        "ON CONFLICT(user_id, challenge_key) DO UPDATE SET points = points + excluded.points, updated_at = excluded.updated_at",
+    ).run(userId, challengeKey, points, now)
+  },
+
+  async challengeLeaderboard(challengeKey: string): Promise<{ name: string; points: number; userId: string }[]> {
+    if (usingPostgres) {
+      const rows = (await sql`SELECT cp.user_id AS user_id, cp.points AS points, u.name AS name
+        FROM challenge_progress cp JOIN users u ON u.id = cp.user_id
+        WHERE cp.challenge_key = ${challengeKey} ORDER BY cp.points DESC LIMIT 50`) as unknown as Record<string, unknown>[]
+      return rows.map((r) => ({ userId: r.user_id as string, points: Number(r.points), name: r.name as string }))
+    }
+    const rows = sqlite!.prepare(
+      "SELECT cp.user_id AS user_id, cp.points AS points, u.name AS name FROM challenge_progress cp JOIN users u ON u.id = cp.user_id WHERE cp.challenge_key = ? ORDER BY cp.points DESC LIMIT 50",
+    ).all(challengeKey) as Record<string, unknown>[]
+    return rows.map((r) => ({ userId: r.user_id as string, points: Number(r.points), name: r.name as string }))
+  },
+
+  async challengeProgressFor(userId: string): Promise<{ challengeKey: string; points: number }[]> {
+    if (usingPostgres) {
+      const rows = (await sql`SELECT challenge_key, points FROM challenge_progress WHERE user_id = ${userId}`) as unknown as { challenge_key: string; points: number }[]
+      return rows.map((r) => ({ challengeKey: r.challenge_key, points: Number(r.points) }))
+    }
+    const rows = sqlite!.prepare("SELECT challenge_key, points FROM challenge_progress WHERE user_id = ?").all(userId) as { challenge_key: string; points: number }[]
+    return rows.map((r) => ({ challengeKey: r.challenge_key, points: Number(r.points) }))
+  },
+
+  async challengeJoinsFor(userId: string): Promise<string[]> {
+    if (usingPostgres) {
+      const rows = (await sql`SELECT challenge_key FROM challenge_joins WHERE user_id = ${userId}`) as unknown as { challenge_key: string }[]
+      return rows.map((r) => r.challenge_key)
+    }
+    const rows = sqlite!.prepare("SELECT challenge_key FROM challenge_joins WHERE user_id = ?").all(userId) as { challenge_key: string }[]
+    return rows.map((r) => r.challenge_key)
+  },
+
+  // ----- premium activation codes -----
+
+  async findPremiumCode(code: string): Promise<{ code: string; months: number; maxUses: number; uses: number } | null> {
+    const map = (r: { code: string; months: number; max_uses: number; uses: number }) => ({ code: r.code, months: r.months, maxUses: r.max_uses, uses: r.uses })
+    if (usingPostgres) {
+      const rows = (await sql`SELECT code, months, max_uses, uses FROM premium_codes WHERE code = ${code} LIMIT 1`) as unknown as { code: string; months: number; max_uses: number; uses: number }[]
+      return rows[0] ? map(rows[0]) : null
+    }
+    const row = sqlite!.prepare("SELECT code, months, max_uses, uses FROM premium_codes WHERE code = ?").get(code) as { code: string; months: number; max_uses: number; uses: number } | undefined
+    return row ? map(row) : null
+  },
+
+  async redeemPremiumCode(code: string, userId: string): Promise<{ ok: boolean; months?: number; reason?: string }> {
+    const normalized = code.trim().toUpperCase()
+    const row = await this.findPremiumCode(normalized)
+    if (!row) return { ok: false, reason: "Code inconnu" }
+    if (row.uses >= row.maxUses) return { ok: false, reason: "Code déjà utilisé" }
+    if (usingPostgres) {
+      const res = (await sql`UPDATE premium_codes SET uses = uses + 1 WHERE code = ${normalized} AND uses < max_uses RETURNING months`) as unknown as { months: number }[]
+      if (res.length === 0) return { ok: false, reason: "Code déjà utilisé" }
+      return { ok: true, months: Number(res[0].months) }
+    }
+    const res = sqlite!.prepare("UPDATE premium_codes SET uses = uses + 1 WHERE code = ? AND uses < max_uses RETURNING months").get(normalized) as { months: number } | undefined
+    if (!res) return { ok: false, reason: "Code déjà utilisé" }
+    return { ok: true, months: Number(res.months) }
+  },
+
+  async createPremiumCode(code: string, months: number, maxUses: number): Promise<void> {
+    if (usingPostgres) {
+      await sql`INSERT INTO premium_codes (code, months, max_uses, uses, created_at) VALUES (${code}, ${months}, ${maxUses}, 0, ${Date.now()})
+        ON CONFLICT (code) DO NOTHING`
+      return
+    }
+    sqlite!.prepare("INSERT OR IGNORE INTO premium_codes (code, months, max_uses, uses, created_at) VALUES (?, ?, ?, 0, ?)").run(code, months, maxUses, Date.now())
   },
 }
 

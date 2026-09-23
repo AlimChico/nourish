@@ -163,9 +163,13 @@ export async function POST(request: Request) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   const baseUrl = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com"
-  if (!apiKey) {
+  // Placeholder/machine-level env values (e.g. ANTHROPIC_API_KEY=admin or a
+  // third-party proxy URL) must not be treated as a real configuration.
+  const looksFakeKey = !apiKey || apiKey.length < 20 || apiKey === "admin"
+  const usesProxy = /openapis\.online|localhost|127\.0\.0\.1/i.test(baseUrl)
+  if (looksFakeKey || usesProxy) {
     return Response.json(
-      { ...buildDemoResult(), error: "AI not configured" } satisfies ScanResponse,
+      { ...buildDemoResult(), error: "Clé IA non configurée — ajoute ANTHROPIC_API_KEY dans les variables Vercel." } satisfies ScanResponse,
       { status: 200 },
     )
   }

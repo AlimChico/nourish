@@ -44,6 +44,10 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
   const startCamera = useCallback(async () => {
     setError(null)
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("Caméra non disponible ici — importe une photo de ton plat.")
+        return
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
         audio: false,
@@ -54,7 +58,7 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
         await videoRef.current.play().catch(() => {})
       }
     } catch {
-      setError("Camera unavailable — upload a photo instead.")
+      setError("Caméra inaccessible — autorise l'accès ou importe une photo.")
     }
   }, [])
 
@@ -110,7 +114,7 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
       setQtys(Object.fromEntries(r.items.map((_, i) => [i, r.items[i].quantity])))
       setPhase("review")
     } catch {
-      setError("Analysis failed — check your connection and try again.")
+      setError("Analyse impossible — vérifie ta connexion puis réessaie (ou importe une photo).")
       setPhase("capture")
       void startCamera()
     }
@@ -313,12 +317,12 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
                 {result.description && (
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{result.description}</p>
                 )}
-                {result.source === "demo" && (
-                  <p className="mt-2 flex items-center gap-1.5 rounded-xl bg-carbs-soft px-3 py-2 text-xs font-semibold text-carbs">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    AI service temporarily unavailable — showing sample data.
-                  </p>
-                )}
+            {result.source === "demo" && (
+              <p className="mt-2 flex items-center gap-1.5 rounded-xl bg-carbs-soft px-3 py-2 text-xs font-semibold text-carbs">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {result.description}
+              </p>
+            )}
               </div>
             )}
 

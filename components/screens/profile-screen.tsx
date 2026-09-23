@@ -13,6 +13,7 @@ import {
   LogOut,
   Award,
   ScanLine,
+  Users,
 } from "lucide-react"
 import { usePremium, FREE_SCANS_PER_DAY } from "@/lib/premium"
 import { useTheme } from "@/lib/use-theme"
@@ -26,11 +27,13 @@ export function ProfileScreen({
   onOpenCalculator,
   onOpenPremium,
   onOpenSettings,
+  onOpenCommunity,
   onLogout,
 }: {
   onOpenCalculator: () => void
   onOpenPremium: () => void
   onOpenSettings: () => void
+  onOpenCommunity: () => void
   onLogout: () => void
 }) {
   const { isPremium, premium, freeScansLeft, scansUsedToday } = usePremium()
@@ -138,6 +141,7 @@ export function ProfileScreen({
       {/* Tools */}
       <Section title="Tools">
         <Row icon={Calculator} label="Calorie calculator" onClick={onOpenCalculator} tone="primary" />
+        <Row icon={Users} label="Communauté — défis & recettes" onClick={onOpenCommunity} tone="primary" />
         <Row icon={Target} label="Goals & targets" onClick={onOpenSettings} tone="carbs" />
         <Row icon={Ruler} label="Body measurements" onClick={onOpenSettings} tone="steps" />
       </Section>
