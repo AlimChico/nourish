@@ -20,6 +20,13 @@ export const maxDuration = 60
 
 const TZ = "Africa/Tunis"
 const MAX_PER_RUN = 2000
+/**
+ * PUSH_CRON_MODE=hourly → l'heure exacte choisie par chaque utilisateur est honorée
+ * (nécessite un cron horaire : Vercel Pro, ou un ping externe type cron-job.org).
+ * Par défaut (mode journalier, plan Hobby Vercel = 1 cron/jour max) : l'envoi part
+ * une fois par jour à l'heure du cron (20h Tunis), sans filtrage par utilisateur.
+ */
+const HOURLY = process.env.PUSH_CRON_MODE === "hourly"
 
 function dayKeyTunis(d = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d)
@@ -89,10 +96,11 @@ export async function GET(request: Request) {
       skippedAlready += 1
       continue
     }
-    if (nowHour !== targetHour) {
+    if (HOURLY && nowHour !== targetHour) {
       skippedHour += 1
       continue
     }
+    // Mode journalier : dédup suffit (un envoi/jour max, à l'heure du cron).
 
     const day = (await db.getDay(sub.userId, today)) as DayData | null
     const acc = calcNutrition({
