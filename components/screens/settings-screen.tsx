@@ -84,9 +84,9 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up sm:mx-auto sm:max-w-2xl sm:border-x sm:border-[#a7f3d0]/10 sm:shadow-2xl">
       {/* Header */}
-      <header className="flex items-center gap-3 border-b border-border px-4 pb-3 pt-5">
+      <header className="flex items-center gap-3 border-b border-border px-4 pb-3 pt-5 sm:px-6">
         {section !== "root" ? (
           <button
             type="button"
@@ -109,7 +109,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         <h1 className="text-lg font-extrabold tracking-tight">{titles[section]}</h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-10 pt-4">
+      <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-10 pt-4 sm:px-6">
         {section === "root" && (
           <div className="flex flex-col gap-5">
             {/* identity card */}

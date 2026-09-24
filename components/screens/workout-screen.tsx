@@ -205,7 +205,7 @@ export function WorkoutScreen() {
             </div>
 
             {/* Exercise blocks */}
-            <div className="mt-3 flex flex-col gap-2">
+            <div className="mt-3 flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:items-start sm:gap-3">
               {workout.blocks.map((b, i) => {
                 const done = doneBlocks.has(i)
                 return (

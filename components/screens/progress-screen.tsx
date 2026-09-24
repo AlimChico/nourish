@@ -146,8 +146,8 @@ export function ProgressScreen() {
   }, [state.meals])
 
   return (
-    <div className="aurora-glow mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:px-6">
-      <header className="flex items-center justify-between">
+    <div className="aurora-glow mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:grid sm:grid-cols-2 sm:items-start sm:px-6">
+      <header className="flex items-center justify-between sm:col-span-2">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Progress</h1>
           <p className="text-sm text-muted-foreground">
@@ -159,7 +159,7 @@ export function ProgressScreen() {
       </header>
 
       {/* Range switch */}
-      <div className="flex gap-1 rounded-2xl bg-muted p-1">
+      <div className="flex gap-1 rounded-2xl bg-muted p-1 sm:col-span-2">
         {ranges.map((r) => (
           <button
             key={r}
@@ -176,7 +176,7 @@ export function ProgressScreen() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-4 sm:gap-4">
         <StatCard icon={Flame} tone="carbs" label="Avg intake" value={avgCals > 0 ? `${avgCals}` : "—"} sub="kcal / logged day" />
         <StatCard icon={Award} tone="fat" label="Streak" value={`${streak} day${streak === 1 ? "" : "s"}`} sub={streak > 0 ? "keep going!" : "log today!"} />
         <StatCard icon={Target} tone="protein" label="Goal hit" value={goalHit !== null ? `${goalHit}%` : "—"} sub="of days on target" />
@@ -326,7 +326,7 @@ export function ProgressScreen() {
       </section>
 
       {/* Today's timeline */}
-      <section className="rounded-3xl bg-card p-5 shadow-sm">
+      <section className="rounded-3xl bg-card p-5 shadow-sm sm:col-span-2">
         <div className="mb-3 flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-primary">
             <Clock3 className="h-4 w-4" />
@@ -358,7 +358,7 @@ export function ProgressScreen() {
       </section>
 
       {/* Day history list */}
-      <section className="rounded-3xl bg-card p-5 shadow-sm">
+      <section className="rounded-3xl bg-card p-5 shadow-sm sm:col-span-2">
         <div className="mb-3 flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-steps-soft text-steps">
             <CalendarDays className="h-4 w-4" />
@@ -394,7 +394,9 @@ export function ProgressScreen() {
       </section>
 
       {/* Ad footer — below all content, never interrupting charts or lists */}
-      <AdSlot slot={AD_SLOTS.progressFooter} format="footer" />
+      <div className="sm:col-span-2">
+        <AdSlot slot={AD_SLOTS.progressFooter} format="footer" />
+      </div>
     </div>
   )
 }

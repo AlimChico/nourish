@@ -120,9 +120,9 @@ export function PremiumScreen({ onClose }: { onClose: () => void }) {
       : "—"
 
   return (
-    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-secondary text-[#e6fff1] animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-secondary text-[#e6fff1] animate-slide-up sm:mx-auto sm:max-w-2xl sm:border-x sm:border-[#a7f3d0]/10 sm:shadow-2xl">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3">
+      <div className="flex items-center justify-between px-5 py-3 sm:px-6">
         <div className="flex items-center gap-2">
           {step === "checkout" && (
             <button
@@ -164,7 +164,7 @@ export function PremiumScreen({ onClose }: { onClose: () => void }) {
               <p className="mt-2 text-pretty text-sm text-[#e6fff1]/60">Paiement en dinar tunisien 🇹🇳 — annulable à tout moment.</p>
             </div>
 
-            <div className="mt-7 space-y-3">
+            <div className="mt-7 space-y-3 sm:grid sm:grid-cols-2 sm:gap-3 sm:space-y-0">
               {features.map((f) => (
                 <div key={f.title} className="flex items-center gap-3 rounded-2xl bg-[#a7f3d0]/5 p-3.5">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">

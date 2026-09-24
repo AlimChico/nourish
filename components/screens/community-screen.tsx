@@ -314,9 +314,9 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
   const myRank = leaderboard.findIndex((l) => l.userId === user?.id) + 1
 
   return (
-    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up sm:mx-auto sm:max-w-2xl sm:border-x sm:border-[#a7f3d0]/10 sm:shadow-2xl">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3">
+      <div className="flex items-center justify-between px-5 py-3 sm:px-6">
         <div className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-primary">
             <Users className="h-5 w-5" />
@@ -337,7 +337,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* Tabs */}
-      <div className="mx-5 mb-1 grid grid-cols-2 rounded-2xl bg-muted p-1">
+      <div className="mx-5 mb-1 grid grid-cols-2 rounded-2xl bg-muted p-1 sm:mx-6">
         {(["challenges", "recipes"] as const).map((t) => (
           <button
             key={t}
@@ -353,7 +353,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-8">
+      <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-8 sm:px-6">
         {loading && (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
@@ -367,7 +367,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
               <h2 className="mb-3 flex items-center gap-2 text-base font-extrabold">
                 <Medal className="h-4 w-4 text-primary" /> Tes badges
               </h2>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-3">
                 {badges.map((b) => (
                   <div
                     key={b.key}
@@ -551,8 +551,8 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
 
       {/* Composer */}
       {showComposer && (
-        <div className="safe-top absolute inset-0 z-10 flex flex-col bg-background animate-slide-up">
-          <div className="flex items-center justify-between px-5 py-3">
+        <div className="safe-top absolute inset-0 z-10 flex flex-col bg-background animate-slide-up sm:mx-auto sm:max-w-2xl sm:border-x sm:border-[#a7f3d0]/10 sm:shadow-2xl">
+          <div className="flex items-center justify-between px-5 py-3 sm:px-6">
             <h2 className="text-lg font-extrabold">Partager une recette</h2>
             <button
               type="button"
@@ -563,7 +563,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
               <X className="h-5 w-5" />
             </button>
           </div>
-          <div className="flex-1 space-y-4 overflow-y-auto no-scrollbar px-5 pb-8">
+          <div className="flex-1 space-y-4 overflow-y-auto no-scrollbar px-5 pb-8 sm:px-6">
             <div className="flex gap-2">
               {["🥗", "🍲", "🐟", "🥘", "🍳", "🫑", "🍗", "🥙"].map((e) => (
                 <button

@@ -137,8 +137,10 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
+      {/* Colonne de lecture centrée sur tablette (ligne courte = lisible) */}
+      <div className="mx-auto flex h-full w-full max-w-2xl flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3">
+      <div className="flex items-center justify-between px-5 py-3 sm:px-6">
         <div className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-primary">
             <Sparkles className="h-5 w-5" />
@@ -156,7 +158,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar px-5 pb-4">
+      <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar px-5 pb-4 sm:px-6">
         {messages.length === 0 && (
           <div className="mt-6 rounded-3xl border border-[#a7f3d0]/10 bg-card p-5 text-center">
             <span className="text-4xl">🧠</span>
@@ -193,7 +195,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
 
       {/* Suggestions */}
       {messages.length === 0 && !busy && (
-        <div className="flex snap-x gap-2 overflow-x-auto no-scrollbar px-5 pb-2">
+        <div className="flex snap-x gap-2 overflow-x-auto no-scrollbar px-5 pb-2 sm:px-6">
           {SUGGESTIONS.map((s) => (
             <button
               key={s}
@@ -209,7 +211,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
 
       {/* Quota nudge for free users */}
       {!isPremium && quotaLeft === 0 && (
-        <div className="mx-5 mb-2 flex items-center gap-2 rounded-2xl bg-accent p-3 text-xs font-semibold text-accent-foreground">
+        <div className="mx-5 mb-2 flex items-center gap-2 rounded-2xl bg-accent p-3 text-xs font-semibold text-accent-foreground sm:mx-6">
           <Crown className="h-4 w-4 shrink-0 text-primary" />
           Passe Premium pour un coach illimité.
         </div>
@@ -241,6 +243,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
             <Send className="h-5 w-5" />
           </button>
         </form>
+      </div>
       </div>
     </div>
   )

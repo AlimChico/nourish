@@ -135,7 +135,7 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
       {results.length > 0 || offResults.length > 0 ? (
         <section className="animate-fade-in">
           <SectionTitle>Results</SectionTitle>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:items-start sm:gap-3">
             {results.map((f, i) => (
               <FoodFragment key={f.id} f={f} i={i} pending={pending} queue={queue} offCount={offResults.length} />
             ))}
@@ -187,7 +187,7 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
               />
             )}
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:items-start sm:gap-3">
               {customs.length === 0 && !showCreator && (
                 <p className="rounded-2xl border border-dashed border-[#a7f3d0]/20 p-4 text-center text-xs text-muted-foreground">
                   Create your recipes — grandma&apos;s couscous, your protein shake… they&apos;ll live here.
@@ -292,7 +292,7 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
           {/* Recent */}
           <section className="animate-fade-in">
             <SectionTitle icon={<Clock className="h-4 w-4" />}>Recent</SectionTitle>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:items-start sm:gap-3">
               {recentFoods.map((f) => (
                 <FoodRow key={f.id} food={f} added={pending.some((p) => p.id === f.id)} onToggle={() => queue(f)} />
               ))}
@@ -302,7 +302,7 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
           {/* Popular */}
           <section className="animate-fade-in">
             <SectionTitle icon={<Flame className="h-4 w-4" />}>Popular</SectionTitle>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:items-start sm:gap-3">
               {popularFoods.map((f) => (
                 <FoodRow key={f.id} food={f} added={pending.some((p) => p.id === f.id)} onToggle={() => queue(f)} />
               ))}

@@ -35,11 +35,14 @@ export const viewport: Viewport = {
     { media: '(prefers-color-scheme: light)', color: '#f4fbf7' },
     { media: '(prefers-color-scheme: dark)', color: '#0b0f0d' },
   ],
-  // viewport-fit=cover (défaut) + safe-area gérée par MobileFrame : le contenu
-  // commence sous la barre de statut sans jamais la chevaucher.
+  // viewport-fit=cover : le contenu s'étend sous l'encoche/la barre d'accueil,
+  // et env(safe-area-inset-*) devient réel — MobileFrame + BottomNav s'en servent
+  // (safe-top / safe-bottom) pour ne jamais passer sous la barre de statut iOS
+  // ni sous le geste Accueil, en portrait comme en paysage.
   // Zoom rétabli (accessibilité) : plus de maximumScale=1.
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
 }
 
 const themeInit = `try{var t=localStorage.getItem('nourish.theme.v1');var d=t!=='light';var r=document.documentElement;r.classList.toggle('dark',d);r.classList.toggle('light',!d)}catch(e){}`

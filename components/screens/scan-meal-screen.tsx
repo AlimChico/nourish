@@ -297,7 +297,7 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         /* ---------- Review ---------- */
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden sm:mx-auto sm:w-full sm:max-w-2xl">
           <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-6">
             {result?.thumbnail && (
               <div className="relative mt-2 overflow-hidden rounded-3xl">
@@ -438,7 +438,7 @@ function DetectedRow({
             type="button"
             onClick={() => onQty(Math.max(1, qty - 1))}
             aria-label={`Decrease ${item.name} quantity`}
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted active:scale-90"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted active:scale-90 sm:h-9 sm:w-9"
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
@@ -447,7 +447,7 @@ function DetectedRow({
             type="button"
             onClick={() => onQty(Math.min(9, qty + 1))}
             aria-label={`Increase ${item.name} quantity`}
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-primary active:scale-90"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-primary active:scale-90 sm:h-9 sm:w-9"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
@@ -456,7 +456,7 @@ function DetectedRow({
             onClick={onToggle}
             aria-label={kept ? `Exclude ${item.name}` : `Include ${item.name}`}
             className={cn(
-              "ml-1 flex h-7 w-7 items-center justify-center rounded-full transition-colors",
+              "ml-1 flex h-8 w-8 items-center justify-center rounded-full transition-colors sm:h-9 sm:w-9",
               kept ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
             )}
           >

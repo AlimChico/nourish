@@ -255,7 +255,7 @@ export function HomeScreen({
             See all
           </button>
         </div>
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2.5 sm:grid sm:grid-cols-2 sm:items-start sm:gap-3">
           {mealOrder.map((key) => {
             const entries = state.meals[key]
             const t = totalsFor(entries)
@@ -301,9 +301,9 @@ export function HomeScreen({
                         onAddFood(key)
                       }
                     }}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-primary transition-transform active:scale-90"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-primary transition-transform active:scale-90 sm:h-10 sm:w-10"
                   >
-                    <Plus className="h-4 w-4" strokeWidth={2.5} />
+                    <Plus className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.5} />
                   </span>
                   {!empty && (
                     <ChevronDown
@@ -384,17 +384,17 @@ export function HomeScreen({
                   type="button"
                   onClick={() => addWater(-1)}
                   aria-label="Remove a glass of water"
-                  className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-foreground active:scale-90"
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-foreground active:scale-90 sm:h-8 sm:w-8"
                 >
-                  <Minus className="h-3.5 w-3.5" />
+                  <Minus className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => addWater(1)}
                   aria-label="Add a glass of water"
-                  className="flex h-6 w-6 items-center justify-center rounded-md bg-water text-[#e6fff1] active:scale-95"
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-water text-[#e6fff1] active:scale-95 sm:h-8 sm:w-8"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -655,7 +655,7 @@ function DeleteEntryButton({ meal, entryId }: { meal: MealKey; entryId: string }
       type="button"
       onClick={() => removeEntry(meal, entryId)}
       aria-label="Remove entry"
-      className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground active:scale-90"
+      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground active:scale-90 sm:h-9 sm:w-9"
     >
       <Trash2 className="h-4 w-4" />
     </button>
@@ -692,11 +692,11 @@ function SuggestionsCard({ remaining }: { remaining: number }) {
           Fits your {remaining.toLocaleString()} kcal left
         </h2>
       </div>
-      <div className="flex snap-x gap-2 overflow-x-auto no-scrollbar pb-1">
+      <div className="flex snap-x gap-2 overflow-x-auto no-scrollbar pb-1 sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible">
         {suggestions.map((s) => (
           <div
             key={s.name}
-            className="w-40 shrink-0 snap-start rounded-2xl border border-[#a7f3d0]/15 bg-muted/40 p-3"
+            className="w-40 shrink-0 snap-start rounded-2xl border border-[#a7f3d0]/15 bg-muted/40 p-3 sm:w-auto"
           >
             <span className="text-2xl">{s.emoji}</span>
             <p className="mt-1 truncate text-sm font-bold">{s.name}</p>
