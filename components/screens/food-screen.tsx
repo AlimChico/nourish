@@ -22,6 +22,7 @@ import {
 } from "@/lib/food-requests"
 import { mealMeta, useFoodLog, type MealKey } from "@/lib/food-log"
 import { targetForTime } from "@/lib/meal-scan"
+import { AdSlot, AD_SLOTS } from "@/components/ad-slot"
 import { cn } from "@/lib/utils"
 
 type OffResult = FoodItem & { _off?: boolean }
@@ -135,10 +136,10 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
         <section className="animate-fade-in">
           <SectionTitle>Results</SectionTitle>
           <div className="flex flex-col gap-2">
-            {results.map((f) => (
-              <FoodRow key={f.id} food={f} added={pending.some((p) => p.id === f.id)} onToggle={() => queue(f)} />
+            {results.map((f, i) => (
+              <FoodFragment key={f.id} f={f} i={i} pending={pending} queue={queue} offCount={offResults.length} />
             ))}
-            {offResults.filter((o) => !results.some((r) => r.name.toLowerCase() === o.name.toLowerCase())).slice(0, 8).map((o) => (
+            {offResults.filter((o) => !results.some((r) => r.name.toLowerCase() === o.name.toLowerCase())).slice(0, 8).map((o, j) => (
               <FoodRow key={o.id} food={o} added={pending.some((p) => p.id === o.id)} onToggle={() => queue(o)} badge="🌍 OFF" />
             ))}
           </div>
@@ -455,6 +456,31 @@ function FoodRow({ food, added, onToggle, badge }: { food: FoodItem; added: bool
         <Plus className={cn("h-5 w-5 transition-transform", added && "rotate-45")} strokeWidth={2.5} />
       </button>
     </div>
+  )
+}
+
+/** One search result — with a single ad inserted every 9 results (never first, never blocking). */
+const AD_EVERY = 9
+function FoodFragment({
+  f,
+  i,
+  pending,
+  queue,
+}: {
+  f: FoodItem
+  i: number
+  pending: FoodItem[]
+  queue: (food: FoodItem) => void
+  offCount: number
+}) {
+  void 0
+  return (
+    <>
+      <FoodRow food={f} added={pending.some((p) => p.id === f.id)} onToggle={() => queue(f)} />
+      {i > 0 && (i + 1) % AD_EVERY === 0 && (
+        <AdSlot slot={AD_SLOTS.foodResults} format="inline" className="my-1" />
+      )}
+    </>
   )
 }
 

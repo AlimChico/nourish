@@ -14,6 +14,7 @@ import {
   Droplets,
   Dumbbell,
   Beef,
+  Sparkles,
 } from "lucide-react"
 import { AnimatedCounter } from "@/components/animated-counter"
 import { macroMeta, type MacroKey } from "@/lib/nutrition-data"
@@ -22,6 +23,7 @@ import { suggestRecipes } from "@/lib/food-requests"
 import { useAccount } from "@/lib/account"
 import { useHealth } from "@/lib/health"
 import { useStreak } from "@/components/use-streak"
+import { AdSlot, AD_SLOTS } from "@/components/ad-slot"
 import { cn } from "@/lib/utils"
 
 const dayKeyOf = (d: Date) => d.toISOString().slice(0, 10)
@@ -64,10 +66,12 @@ export function HomeScreen({
   onAddFood,
   onOpenScan,
   onOpenSettings,
+  onOpenCoach,
 }: {
   onAddFood: (meal?: MealKey) => void
   onOpenScan: () => void
   onOpenSettings: () => void
+  onOpenCoach?: () => void
 }) {
   const { state, addWater } = useFoodLog()
   const { state: account, targets } = useAccount()
@@ -129,14 +133,24 @@ export function HomeScreen({
           </h1>
           <p className="text-sm text-muted-foreground">Let&apos;s reach your goal today.</p>
         </div>
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          aria-label="Open settings"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#a7f3d0]/15 bg-secondary text-sm font-bold text-primary-foreground transition-transform active:scale-90"
-        >
-          {firstName ? firstName.slice(0, 2).toUpperCase() : "SA"}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenCoach}
+            aria-label="Ouvrir le coach IA"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#a7f3d0]/15 bg-accent text-primary transition-transform active:scale-90"
+          >
+            <Sparkles className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            aria-label="Open settings"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#a7f3d0]/15 bg-secondary text-sm font-bold text-primary-foreground transition-transform active:scale-90"
+          >
+            {firstName ? firstName.slice(0, 2).toUpperCase() : "SA"}
+          </button>
+        </div>
       </header>
 
       {/* Weekly streak tracker — real user data */}
@@ -434,6 +448,9 @@ export function HomeScreen({
 
       {/* Tip of the day — rotates daily */}
       <TipCard />
+
+      {/* Ad banner — bottom of the dashboard, right above the tab bar (never near the CTA or calorie card) */}
+      <AdSlot slot={AD_SLOTS.homeBanner} format="banner" />
     </div>
   )
 }

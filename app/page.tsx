@@ -15,6 +15,7 @@ import { ScanMealScreen } from "@/components/screens/scan-meal-screen"
 import { BarcodeScannerScreen } from "@/components/screens/barcode-scanner-screen"
 import { SettingsScreen } from "@/components/screens/settings-screen"
 import { CommunityScreen, CommunityFoodLogBridge } from "@/components/screens/community-screen"
+import { CoachScreen } from "@/components/screens/coach-screen"
 import { InstallPrompt } from "@/components/install-prompt"
 import { FoodLogProvider } from "@/lib/food-log"
 import { PremiumProvider } from "@/lib/premium"
@@ -24,7 +25,7 @@ import { HealthProvider } from "@/lib/health"
 import { SmartNotificationsProvider } from "@/lib/notifications"
 import { WeightProvider } from "@/lib/weight"
 
-type Overlay = "none" | "calculator" | "premium" | "scan" | "barcode" | "settings" | "community"
+type Overlay = "none" | "calculator" | "premium" | "scan" | "barcode" | "settings" | "community" | "coach"
 
 function App() {
   const { state, hydrated, logout } = useAccount()
@@ -51,6 +52,7 @@ function App() {
             onAddFood={() => setTab("food")}
             onOpenScan={() => setOverlay("barcode")}
             onOpenSettings={() => setOverlay("settings")}
+            onOpenCoach={() => setOverlay("coach")}
           />
         )}
         {tab === "food" && <FoodScreen onOpenScan={() => setOverlay("scan")} onOpenBarcode={() => setOverlay("barcode")} />}
@@ -78,6 +80,7 @@ function App() {
       {overlay === "barcode" && <BarcodeScannerScreen onClose={() => setOverlay("none")} />}
       {overlay === "settings" && <SettingsScreen onClose={() => setOverlay("none")} />}
       {overlay === "community" && <CommunityScreen onClose={() => setOverlay("none")} />}
+      {overlay === "coach" && <CoachScreen onClose={() => setOverlay("none")} />}
     </MobileFrame>
   )
 }

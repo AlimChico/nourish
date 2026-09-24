@@ -27,15 +27,16 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const challenge = url.searchParams.get("challenge") || "ramadan-2026"
 
-  const [recipes, leaderboard, progress, joins] = await Promise.all([
+  const [recipes, leaderboard, progress, joins, likes] = await Promise.all([
     db.listRecipes(60),
     db.challengeLeaderboard(challenge),
     db.challengeProgressFor(user.id),
     db.challengeJoinsFor(user.id),
+    db.likesSummaryFor(user.id),
   ])
 
   return Response.json({
-    recipes,
+    recipes: recipes.map((r) => ({ ...r, likes: likes[r.id]?.total ?? 0, likedByMe: likes[r.id]?.liked ?? false })),
     challenge,
     leaderboard,
     myProgress: progress,
@@ -95,6 +96,20 @@ export async function POST(request: Request) {
     await db.addChallengePoints(user.id, key, points)
     const leaderboard = await db.challengeLeaderboard(key)
     return Response.json({ ok: true, leaderboard })
+  }
+
+  if (kind === "like") {
+    const limit = rateLimit(`like:${user.id}`, 40, 60 * 1000)
+    if (!limit.ok) return Response.json({ error: "Too many requests" }, { status: 429 })
+    const id = typeof body.id === "string" ? body.id.slice(0, 64) : ""
+    if (!id) return Response.json({ error: "Invalid id" }, { status: 400 })
+    try {
+      const r = await db.toggleRecipeLike(id, user.id)
+      return Response.json({ ok: true, ...r })
+    } catch {
+      // FK violation: recipe doesn't exist (deleted concurrently)
+      return Response.json({ error: "Recette introuvable" }, { status: 404 })
+    }
   }
 
   if (kind === "delete-recipe") {

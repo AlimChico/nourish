@@ -9,6 +9,7 @@ import { useAccount } from "@/lib/account"
 import { useHealth } from "@/lib/health"
 import { useWeight } from "@/lib/weight"
 import { useStreak } from "@/components/use-streak"
+import { AdSlot, AD_SLOTS } from "@/components/ad-slot"
 import { cn } from "@/lib/utils"
 
 const ranges = ["7 days", "30 days", "90 days"] as const
@@ -391,6 +392,9 @@ export function ProgressScreen() {
           ))}
         </div>
       </section>
+
+      {/* Ad footer — below all content, never interrupting charts or lists */}
+      <AdSlot slot={AD_SLOTS.progressFooter} format="footer" />
     </div>
   )
 }

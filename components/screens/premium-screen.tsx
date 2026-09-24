@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils"
 import { usePremium, type PremiumPlan } from "@/lib/premium"
 
 type Step = "plans" | "checkout" | "processing" | "success" | "manage" | "redeem"
-type PayMethod = "flouci" | "d17" | "edinar" | "card"
+type PayMethod = "flouci" | "d17" | "edinar" | "card" | "konnect" | "paymee"
 
 const features = [
   { icon: ScanLine, title: "Scans de repas illimités", desc: "Photographie chaque plat, sans limite" },
@@ -40,6 +40,8 @@ const PLANS: Record<PremiumPlan, { label: string; priceTND: string; per: string;
 
 const METHODS: { id: PayMethod; label: string; desc: string; icon: typeof Smartphone }[] = [
   { id: "flouci", label: "Flouci", desc: "Paiement mobile — le plus rapide", icon: Smartphone },
+  { id: "konnect", label: "Konnect", desc: "Paye en ligne par carte tunisienne", icon: CreditCard },
+  { id: "paymee", label: "Paymee", desc: "Paiement local sécurisé", icon: Wallet },
   { id: "d17", label: "D17 / La Poste", desc: "Carte prepaid D17", icon: Wallet },
   { id: "edinar", label: "e-Dinar", desc: "Carte e-Dinar Smart", icon: Landmark },
   { id: "card", label: "Carte bancaire", desc: "Visa / Mastercard internationales", icon: CreditCard },

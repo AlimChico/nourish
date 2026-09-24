@@ -143,6 +143,12 @@ async function makePostgres(url: string) {
     PRIMARY KEY (user_id, challenge_key)
   )`
   await sql`CREATE INDEX IF NOT EXISTS idx_recipes_created ON community_recipes(created_at DESC)`
+  await sql`CREATE TABLE IF NOT EXISTS recipe_likes (
+    recipe_id TEXT NOT NULL REFERENCES community_recipes(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at BIGINT NOT NULL,
+    PRIMARY KEY (recipe_id, user_id)
+  )`
   return sql
 }
 
@@ -232,6 +238,11 @@ CREATE TABLE IF NOT EXISTS challenge_progress (
   points INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, challenge_key)
 );
 CREATE INDEX IF NOT EXISTS idx_recipes_created ON community_recipes(created_at DESC);
+CREATE TABLE IF NOT EXISTS recipe_likes (
+  recipe_id TEXT NOT NULL REFERENCES community_recipes(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL, PRIMARY KEY (recipe_id, user_id)
+);
 `)
 }
 
@@ -563,6 +574,53 @@ export const db = {
     }
     const rows = sqlite!.prepare("SELECT challenge_key FROM challenge_joins WHERE user_id = ?").all(userId) as { challenge_key: string }[]
     return rows.map((r) => r.challenge_key)
+  },
+
+  // ----- recipe likes -----
+
+  async toggleRecipeLike(recipeId: string, userId: string): Promise<{ liked: boolean; total: number }> {
+    if (usingPostgres) {
+      const removed = (await sql`DELETE FROM recipe_likes WHERE recipe_id = ${recipeId} AND user_id = ${userId} RETURNING user_id`) as unknown as { user_id: string }[]
+      if (removed.length === 0) {
+        await sql`INSERT INTO recipe_likes (recipe_id, user_id, created_at) VALUES (${recipeId}, ${userId}, ${Date.now()}) ON CONFLICT DO NOTHING`
+      }
+    } else {
+      const del = sqlite!.prepare("DELETE FROM recipe_likes WHERE recipe_id = ? AND user_id = ?").run(recipeId, userId)
+      if (Number(del.changes) === 0) {
+        sqlite!.prepare("INSERT OR IGNORE INTO recipe_likes (recipe_id, user_id, created_at) VALUES (?, ?, ?)").run(recipeId, userId, Date.now())
+      }
+    }
+    const total = await this.countRecipeLikes(recipeId)
+    const liked = await this.hasLiked(recipeId, userId)
+    return { liked, total }
+  },
+
+  async countRecipeLikes(recipeId: string): Promise<number> {
+    if (usingPostgres) {
+      const rows = (await sql`SELECT COUNT(*)::int AS n FROM recipe_likes WHERE recipe_id = ${recipeId}`) as unknown as { n: number }[]
+      return rows[0]?.n ?? 0
+    }
+    const row = sqlite!.prepare("SELECT COUNT(*) AS n FROM recipe_likes WHERE recipe_id = ?").get(recipeId) as { n: number }
+    return row.n
+  },
+
+  async hasLiked(recipeId: string, userId: string): Promise<boolean> {
+    if (usingPostgres) {
+      const rows = (await sql`SELECT 1 AS x FROM recipe_likes WHERE recipe_id = ${recipeId} AND user_id = ${userId} LIMIT 1`) as unknown as { x: number }[]
+      return rows.length > 0
+    }
+    return !!sqlite!.prepare("SELECT 1 FROM recipe_likes WHERE recipe_id = ? AND user_id = ? LIMIT 1").get(recipeId, userId)
+  },
+
+  async likesSummaryFor(userId: string): Promise<Record<string, { liked: boolean; total: number }>> {
+    // One query per recipe is fine at current scale; called with ≤60 recipes.
+    const recipes = await this.listRecipes(60)
+    const out: Record<string, { liked: boolean; total: number }> = {}
+    for (const r of recipes) {
+      const [total, liked] = await Promise.all([this.countRecipeLikes(r.id), this.hasLiked(r.id, userId)])
+      out[r.id] = { liked, total }
+    }
+    return out
   },
 
   // ----- premium activation codes -----

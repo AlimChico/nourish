@@ -52,6 +52,12 @@ export default function RootLayout({
     <html lang="en" className={`dark ${manrope.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+        {/* Google AdSense — verified-site snippet (required in <head> on every page). */}
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4994351868321038"
+          crossOrigin="anonymous"
+        />
       </head>
       <body className="font-sans antialiased">
         {children}

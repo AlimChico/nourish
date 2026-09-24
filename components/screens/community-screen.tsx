@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { X, Trophy, Users, Plus, ChefHat, Medal, Flame, Footprints, Droplets, Trash2, Check, Loader2 } from "lucide-react"
+import { X, Trophy, Users, Plus, ChefHat, Medal, Flame, Footprints, Droplets, Trash2, Check, Loader2, Heart, Share2, Sparkles } from "lucide-react"
 import { useSync } from "@/lib/sync"
 import { useAccount } from "@/lib/account"
 import { useFoodLog } from "@/lib/food-log"
@@ -21,6 +21,8 @@ type Recipe = {
   fat: number
   emoji: string
   createdAt: number
+  likes?: number
+  likedByMe?: boolean
 }
 
 type Challenge = {
@@ -58,6 +60,8 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
   const [formError, setFormError] = useState<string | null>(null)
   const [form, setForm] = useState({ title: "", description: "", calories: "", protein: "", carbs: "", fat: "", emoji: "🥗" })
   const [addedRecipe, setAddedRecipe] = useState<string | null>(null)
+  const [sharing, setSharing] = useState<string | null>(null)
+  const [likeState, setLikeState] = useState<Record<string, { liked: boolean; total: number }>>({})
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -67,6 +71,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
         | { recipes?: Recipe[]; leaderboard?: { userId: string; name: string; points: number }[]; myProgress?: { challengeKey: string; points: number }[]; myJoins?: string[] }
         | null
       setRecipes(data?.recipes ?? [])
+      setLikeState(Object.fromEntries((data?.recipes ?? []).map((r) => [r.id, { liked: r.likedByMe ?? false, total: r.likes ?? 0 }])))
       setLeaderboard(data?.leaderboard ?? [])
       setMyPoints(Object.fromEntries((data?.myProgress ?? []).map((p) => [p.challengeKey, p.points])))
       setJoined(data?.myJoins ?? [])
@@ -155,6 +160,124 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
       body: JSON.stringify({ kind: "delete-recipe", id }),
     })
     await refresh()
+  }
+
+  const toggleLike = async (r: Recipe) => {
+    const prev = likeState[r.id] ?? { liked: false, total: 0 }
+    // optimistic update
+    setLikeState((s) => ({ ...s, [r.id]: { liked: !prev.liked, total: prev.total + (prev.liked ? -1 : 1) } }))
+    try {
+      const res = await fetch("/api/community", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "like", id: r.id }),
+      })
+      const data = (await res.json().catch(() => null)) as { liked?: boolean; total?: number } | null
+      if (res.ok && data) {
+        setLikeState((s) => ({ ...s, [r.id]: { liked: !!data.liked, total: data.total ?? 0 } }))
+      }
+    } catch {
+      setLikeState((s) => ({ ...s, [r.id]: prev })) // revert
+    }
+  }
+
+  /** Generates a branded share card (canvas, Sahtek logo + macros) and opens the Instagram / share sheet. */
+  const shareToInstagram = async (r: Recipe) => {
+    setSharing(r.id)
+    try {
+      const canvas = document.createElement("canvas")
+      canvas.width = 1080
+      canvas.height = 1080
+      const ctx = canvas.getContext("2d")
+      if (!ctx) throw new Error("no canvas")
+
+      // Background: dark green aurora-like gradient
+      const bg = ctx.createLinearGradient(0, 0, 1080, 1080)
+      bg.addColorStop(0, "#0b0f0d")
+      bg.addColorStop(0.55, "#0d1f15")
+      bg.addColorStop(1, "#07130d")
+      ctx.fillStyle = bg
+      ctx.fillRect(0, 0, 1080, 1080)
+      // soft emerald glow
+      const glow = ctx.createRadialGradient(900, 120, 0, 900, 120, 700)
+      glow.addColorStop(0, "rgba(52, 211, 153, 0.35)")
+      glow.addColorStop(1, "rgba(52, 211, 153, 0)")
+      ctx.fillStyle = glow
+      ctx.fillRect(0, 0, 1080, 1080)
+
+      // Logo chip (leaf + SAHTEK)
+      ctx.fillStyle = "#34d399"
+      roundRect(ctx, 84, 84, 88, 88, 24)
+      ctx.fill()
+      ctx.fillStyle = "#06130c"
+      ctx.font = "bold 56px system-ui, sans-serif"
+      ctx.fillText("🌿", 100, 148)
+      ctx.fillStyle = "#e6fff1"
+      ctx.font = "bold 52px system-ui, sans-serif"
+      ctx.fillText("SAHTEK", 196, 146)
+      ctx.fillStyle = "#8fb5a3"
+      ctx.font = "28px system-ui, sans-serif"
+      ctx.fillText("Ton coach nutrition tunisien", 196, 186)
+
+      // Recipe emoji in a rounded card
+      ctx.fillStyle = "rgba(255,255,255,0.05)"
+      roundRect(ctx, 84, 300, 912, 560, 48)
+      ctx.fill()
+      ctx.font = "240px system-ui, sans-serif"
+      ctx.textAlign = "center"
+      ctx.fillText(r.emoji, 540, 500)
+
+      // Title
+      ctx.fillStyle = "#e6fff1"
+      ctx.font = "bold 64px system-ui, sans-serif"
+      const title = r.title.length > 28 ? r.title.slice(0, 27) + "…" : r.title
+      ctx.fillText(title, 540, 660)
+
+      // Macros chips
+      ctx.textAlign = "center"
+      ctx.font = "bold 40px system-ui, sans-serif"
+      ctx.fillStyle = "#fdba74"
+      ctx.fillText(`${r.calories} kcal`, 260, 780)
+      ctx.fillStyle = "#93c5fd"
+      ctx.fillText(`P${r.protein}g`, 470, 780)
+      ctx.fillStyle = "#fcd34d"
+      ctx.fillText(`C${r.carbs}g`, 640, 780)
+      ctx.fillStyle = "#c4b5fd"
+      ctx.fillText(`F${r.fat}g`, 810, 780)
+
+      // CTA
+      ctx.fillStyle = "#a7f3d0"
+      ctx.font = "36px system-ui, sans-serif"
+      ctx.fillText(`Recette partagée par ${r.authorName} 💚`, 540, 920)
+      ctx.fillStyle = "#8fb5a3"
+      ctx.font = "30px system-ui, sans-serif"
+      ctx.fillText("Télécharge Sahtek — lien en bio", 540, 980)
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.92))
+      if (!blob) throw new Error("blob")
+      const file = new File([blob], `sahtek-${r.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`, { type: "image/png" })
+
+      // Instagram first (mobile share sheet when the app exposes it), then generic share, then download.
+      const nav = navigator as Navigator & { canShare?: (d: { files?: File[] }) => boolean }
+      if (nav.canShare && nav.share) {
+        const data = { files: [file], title: r.title, text: `${r.title} — recette healthy partagée sur Sahtek 🌿` }
+        if (nav.canShare(data)) {
+          await nav.share(data)
+          return
+        }
+      }
+      // Fallback: download the card so the user posts it manually
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = file.name
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      // share cancelled or unsupported — silent
+    } finally {
+      setSharing(null)
+    }
   }
 
   /** Quick-add a community recipe to the right meal (reuses the food log engine). */
@@ -353,7 +476,9 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
             )}
 
             <div className="mt-4 flex flex-col gap-3">
-              {recipes.map((r) => (
+              {recipes.map((r) => {
+                const like = likeState[r.id] ?? { liked: false, total: 0 }
+                return (
                 <article key={r.id} className="rounded-3xl border border-[#a7f3d0]/10 bg-card p-4 shadow-sm">
                   <div className="flex items-start gap-3">
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-muted text-2xl">{r.emoji}</span>
@@ -392,8 +517,33 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
                       {addedRecipe === r.id ? "Ajouté !" : "Ajouter"}
                     </button>
                   </div>
+                  {/* Likes + Instagram share card */}
+                  <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+                    <button
+                      type="button"
+                      onClick={() => void toggleLike(r)}
+                      aria-label={like.liked ? "Retirer mon like" : "Liker cette recette"}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-extrabold transition-all active:scale-90",
+                        like.liked ? "bg-rose-500/15 text-rose-400" : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      <Heart className={cn("h-4 w-4", like.liked && "fill-current")} strokeWidth={2.5} />
+                      {like.total > 0 ? like.total : "Like"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void shareToInstagram(r)}
+                      aria-label="Générer la carte Instagram"
+                      className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-fuchsia-500/15 to-amber-400/15 px-3 py-1.5 text-xs font-extrabold text-[#e6fff1]/80 active:scale-90"
+                    >
+                      {sharing === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      Carte Insta
+                    </button>
+                  </div>
                 </article>
-              ))}
+                )
+              })}
             </div>
           </>
         )}
@@ -483,6 +633,17 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
       )}
     </div>
   )
+}
+
+/** Canvas rounded-rect helper for the Instagram share card. */
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
 }
 
 /** Access to the food log for quick-adds (same engine as the rest of the app). */
