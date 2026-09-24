@@ -120,7 +120,7 @@ export function PremiumScreen({ onClose }: { onClose: () => void }) {
       : "—"
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-secondary text-[#e6fff1] animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-secondary text-[#e6fff1] animate-slide-up">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3">
         <div className="flex items-center gap-2">

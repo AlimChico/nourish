@@ -314,7 +314,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
   const myRank = leaderboard.findIndex((l) => l.userId === user?.id) + 1
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3">
         <div className="flex items-center gap-2">
@@ -551,7 +551,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
 
       {/* Composer */}
       {showComposer && (
-        <div className="absolute inset-0 z-10 flex flex-col bg-background animate-slide-up">
+        <div className="safe-top absolute inset-0 z-10 flex flex-col bg-background animate-slide-up">
           <div className="flex items-center justify-between px-5 py-3">
             <h2 className="text-lg font-extrabold">Partager une recette</h2>
             <button
@@ -618,7 +618,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
             </div>
             {formError && <p className="text-center text-sm font-semibold text-destructive">{formError}</p>}
           </div>
-          <div className="border-t border-border bg-card px-5 pb-8 pt-4">
+          <div className="border-t border-border bg-card px-5 pb-8 pt-4 sm:px-6 sm:pb-10">
             <button
               type="button"
               onClick={() => void shareRecipe()}

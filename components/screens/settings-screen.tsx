@@ -84,7 +84,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
       {/* Header */}
       <header className="flex items-center gap-3 border-b border-border px-4 pb-3 pt-5">
         {section !== "root" ? (

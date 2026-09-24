@@ -4,6 +4,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Breakpoints (redimensionnés pour l'app) :
+ *  - Mobile < 480px            → styles de base
+ *  - Tablette 480–1023px       → sm: (portrait & paysage)
+ *  - Desktop ≥ 1024px          → lg:
+ */
+@theme {
+  --breakpoint-sm: 30rem; /* 480px — seuil tablette */
+}
+
 @theme inline {
   --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
   --color-protein: var(--protein);
@@ -159,8 +169,35 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/*
+ * Safe-area (encoche / barre de statut iOS) — appliquées aux conteneurs communs
+ * et aux overlays plein écran. Sur tablette (carte flottante ≥ 480px) l'encoche
+ * ne s'applique plus : reset via media query, cohérent avec --breakpoint-sm.
+ */
+@layer utilities {
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-x {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  @media (min-width: 30rem) {
+    .safe-top {
+      padding-top: 0px;
+    }
   }
 }
 
@@ -176,11 +213,13 @@
     radial-gradient(70% 60% at 50% 45%, rgb(10 61 46 / 0.55), transparent 75%);
 }
 
-/* Soft mint glow used behind key surfaces inside the app. */
+/* Soft mint glow used behind key surfaces inside the app.
+   Les rayons restent purement décoratifs : jamais de bloc plein derrière la
+   barre de statut (le contenu commence sous la safe-area via MobileFrame). */
 @utility aurora-glow {
   background-image:
-    radial-gradient(60% 42% at 82% -8%, rgb(52 211 153 / 0.22), transparent 60%),
-    radial-gradient(46% 34% at -6% 30%, rgb(10 61 46 / 0.5), transparent 65%);
+    radial-gradient(60% 42% at 82% -8%, rgb(52 211 153 / 0.18), transparent 60%),
+    radial-gradient(46% 34% at -6% 30%, rgb(10 61 46 / 0.45), transparent 65%);
 }
 
 @utility no-scrollbar {

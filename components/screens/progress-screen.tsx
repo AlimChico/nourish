@@ -146,7 +146,7 @@ export function ProgressScreen() {
   }, [state.meals])
 
   return (
-    <div className="aurora-glow mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 pb-8 pt-2">
+    <div className="aurora-glow mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:px-6">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Progress</h1>
@@ -176,7 +176,7 @@ export function ProgressScreen() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <StatCard icon={Flame} tone="carbs" label="Avg intake" value={avgCals > 0 ? `${avgCals}` : "—"} sub="kcal / logged day" />
         <StatCard icon={Award} tone="fat" label="Streak" value={`${streak} day${streak === 1 ? "" : "s"}`} sub={streak > 0 ? "keep going!" : "log today!"} />
         <StatCard icon={Target} tone="protein" label="Goal hit" value={goalHit !== null ? `${goalHit}%` : "—"} sub="of days on target" />
@@ -311,11 +311,11 @@ export function ProgressScreen() {
             {totalWater} glasses · goal {targets.water}/day
           </span>
         </div>
-        <div className="flex items-end gap-1" style={{ height: 64 }}>
+        <div className="flex items-end gap-1 sm:gap-1.5" style={{ height: 64 }}>
           {days.slice(-14).map((d) => (
             <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
               <div
-                className={cn("w-full max-w-3 rounded-t-md transition-all", d.water >= targets.water ? "bg-water" : "bg-water/40")}
+                className={cn("w-full max-w-3 rounded-t-md transition-all sm:max-w-none", d.water >= targets.water ? "bg-water" : "bg-water/40")}
                 style={{ height: `${Math.min((d.water / Math.max(targets.water, 1)) * 52, 52) + 4}px` }}
                 title={`${d.water} glasses`}
               />

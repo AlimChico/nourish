@@ -23,7 +23,7 @@ export function CalculatorScreen({ onClose }: { onClose: () => void }) {
   )
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
       <div className="flex items-center justify-between px-5 py-3">
         <div className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-primary">

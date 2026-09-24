@@ -42,7 +42,7 @@ export function ProfileScreen({
   const initials = initialsOf(account.name)
 
   return (
-    <div className="aurora-glow mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 pb-8 pt-2">
+    <div className="aurora-glow mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:px-6">
       {/* Profile header */}
       <header className="flex items-center gap-4">
         <div className="relative">

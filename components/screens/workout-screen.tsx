@@ -74,7 +74,7 @@ export function WorkoutScreen() {
   const allDone = workout ? doneBlocks.size === workout.blocks.length : false
 
   return (
-    <div className="aurora-glow mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 pb-8 pt-2">
+    <div className="aurora-glow mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:px-6">
       <header>
         <h1 className="text-2xl font-extrabold tracking-tight">Workouts</h1>
         <p className="text-sm text-muted-foreground">Move more, feel stronger.</p>
@@ -113,7 +113,7 @@ export function WorkoutScreen() {
         </div>
 
         {/* Muscle picker */}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
           {MUSCLES.map((m) => (
             <button
               key={m}

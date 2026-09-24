@@ -19,7 +19,7 @@ export function BarChart({ data, max, className, barClassName = "bg-primary", un
         const h = Math.max((d.value / peak) * 100, 4)
         return (
           <div key={d.day} className="flex flex-1 flex-col items-center gap-2">
-            <div className="relative flex h-32 w-full items-end justify-center">
+            <div className="relative flex h-[clamp(6rem,22vw,9rem)] w-full items-end justify-center">
               {d.target ? (
                 <div
                   className="absolute left-0 right-0 border-t border-dashed border-muted-foreground/40"
@@ -47,6 +47,8 @@ type LineChartProps = {
 }
 
 export function LineChart({ data, className, stroke = "var(--primary)", fill = "var(--primary)" }: LineChartProps) {
+  // viewBox en unités arbitraires → le SVG s'étire en largeur (preserveAspectRatio="none")
+  // et garde une hauteur fluide : proportionné et lisible du mobile à la tablette.
   const w = 300
   const h = 120
   const pad = 8
@@ -66,7 +68,7 @@ export function LineChart({ data, className, stroke = "var(--primary)", fill = "
 
   return (
     <div className={cn("w-full", className)}>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full" preserveAspectRatio="none" style={{ height: 140 }}>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full" preserveAspectRatio="none" style={{ height: "clamp(6.5rem, 18vw, 10rem)" }}>
         <defs>
           <linearGradient id="lineFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={fill} stopOpacity="0.25" />

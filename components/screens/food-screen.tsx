@@ -101,7 +101,7 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
   }
 
   return (
-    <div className="aurora-glow mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 pb-40 pt-2">
+    <div className="aurora-glow mx-auto flex w-full flex-col gap-6 px-5 pb-40 pt-2 sm:px-6">
       <header>
         <h1 className="text-2xl font-extrabold tracking-tight">Add food</h1>
         <p className="text-sm text-muted-foreground">Millions of foods worldwide + your own recipes.</p>
@@ -149,7 +149,7 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
           {/* Categories */}
           <section className="animate-fade-in">
             <SectionTitle>Categories</SectionTitle>
-            <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
+            <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-8">
               {foodCategories.map((c) => (
                 <button
                   key={c.id}
@@ -282,7 +282,7 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
           {/* Tunisian specialties */}
           <section className="animate-fade-in">
             <SectionTitle icon={<span className="text-base">🇹🇳</span>}>Spécialités tunisiennes</SectionTitle>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
               {tunisianFoods.slice(0, 8).map((f) => (
                 <TunisianCard key={f.id} food={f} added={pending.some((p) => p.id === f.id)} onToggle={() => queue(f)} />
               ))}

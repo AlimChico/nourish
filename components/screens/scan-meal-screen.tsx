@@ -153,7 +153,7 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
   }, [result, activeItems, qtys, meal, addFood, onClose])
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
       {/* Header */}
       <div className={cn("flex items-center justify-between px-5 py-3", phase !== "review" && "text-[#e6fff1]")}>
         <div className="flex items-center gap-2">

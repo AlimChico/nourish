@@ -136,7 +136,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
   const quotaLeft = isPremium ? null : Math.max(0, FREE_DAILY_CHATS - usedToday)
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3">
         <div className="flex items-center gap-2">
@@ -216,7 +216,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
       )}
 
       {/* Input */}
-      <div className="border-t border-border bg-card px-4 pb-8 pt-3">
+      <div className="border-t border-border bg-card px-4 pb-8 pt-3 sm:px-6 sm:pb-10">
         <form
           onSubmit={(e) => {
             e.preventDefault()

@@ -123,11 +123,11 @@ export function HomeScreen({
   }, [state.date, state.history, state.meals, totals.calories, healthState.days])
 
   return (
-    <div className="aurora-glow mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 pb-10 pt-2 sm:px-5">
+    <div className="aurora-glow mx-auto flex w-full flex-col gap-4 px-4 pb-10 pt-2 sm:gap-5 sm:px-6">
       {/* Greeting */}
       <header className="flex items-center justify-between pt-1">
         <div className="min-w-0">
-          <h1 className="truncate text-2xl font-extrabold tracking-tight">
+          <h1 className="truncate text-[clamp(1.25rem,4.5vw,1.75rem)] font-extrabold tracking-tight">
             {greeting}
             {firstName ? `, ${firstName}` : ""} 👋
           </h1>
@@ -157,7 +157,7 @@ export function HomeScreen({
       <StreakCard streak={streak} weekDays={weekDays} />
 
       {/* Compact calories card */}
-      <section className="rounded-3xl border border-[#a7f3d0]/10 bg-card p-5 shadow-sm">
+      <section className="rounded-3xl border border-[#a7f3d0]/10 bg-card p-5 shadow-sm sm:p-6">
         <div className="flex items-end justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
@@ -166,7 +166,7 @@ export function HomeScreen({
             <p className="mt-1 flex items-baseline gap-1.5">
               <span
                 className={cn(
-                  "text-4xl font-black tabular-nums tracking-tight",
+                  "text-[clamp(1.875rem,6vw,2.75rem)] font-black tabular-nums tracking-tight",
                   isOver ? "text-destructive" : "text-calories",
                 )}
               >
@@ -219,8 +219,8 @@ export function HomeScreen({
         </div>
       </section>
 
-      {/* Macros — 3 mini cards */}
-      <section className="grid grid-cols-3 gap-2.5">
+      {/* Macros — 3 mini cards côte à côte, plus larges sur tablette */}
+      <section className="grid grid-cols-3 gap-2.5 sm:gap-4">
         {(Object.keys(macroMeta) as MacroKey[]).map((key) => (
           <MacroMini key={key} macroKey={key} value={Math.round(totals[key])} target={targets[key]} />
         ))}
@@ -340,10 +340,10 @@ export function HomeScreen({
         </div>
       </section>
 
-      {/* Today's goals */}
-      <section className="rounded-3xl border border-[#a7f3d0]/10 bg-card p-4 shadow-sm">
+      {/* Today's goals — liste simple sur mobile, 2 colonnes équilibrées sur tablette */}
+      <section className="rounded-3xl border border-[#a7f3d0]/10 bg-card p-4 shadow-sm sm:p-6">
         <h2 className="mb-3 text-base font-extrabold tracking-tight">Today&apos;s goals</h2>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-start sm:gap-x-8 sm:gap-y-4">
           <GoalRow
             icon={<Flame className="h-4 w-4" />}
             iconBg="bg-calories-soft"
@@ -475,7 +475,7 @@ function StreakCard({ streak, weekDays }: { streak: number; weekDays: WeekDay[] 
             <span
               aria-hidden
               className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black transition-all",
+                "flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black transition-all sm:h-9 sm:w-9",
                 d.isFuture && "border border-dashed border-border bg-transparent text-transparent",
                 !d.isFuture && !d.complete && d.isToday && "border-2 border-primary/80 text-transparent shadow-[0_0_12px_rgba(52,211,153,0.25)]",
                 !d.isFuture && !d.complete && !d.isToday && "bg-muted",
@@ -528,9 +528,9 @@ function MacroMini({ macroKey, value, target }: { macroKey: MacroKey; value: num
   const pct = Math.min((value / Math.max(target, 1)) * 100, 100)
   const done = value >= target
   return (
-    <div className="rounded-2xl border border-[#a7f3d0]/10 bg-card p-3 shadow-sm">
+    <div className="rounded-2xl border border-[#a7f3d0]/10 bg-card p-3 shadow-sm sm:rounded-3xl sm:p-5">
       <div className="flex items-center justify-between">
-        <p className={cn("text-[11px] font-bold", meta.text)}>{meta.label}</p>
+        <p className={cn("text-[11px] font-bold sm:text-sm", meta.text)}>{meta.label}</p>
         {done && <Check className={cn("h-3.5 w-3.5", meta.text)} strokeWidth={3} />}
       </div>
       <p className="mt-1.5 text-base font-extrabold tabular-nums leading-none">
