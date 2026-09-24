@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   Calculator,
   Crown,
@@ -19,6 +20,8 @@ import { usePremium, FREE_SCANS_PER_DAY } from "@/lib/premium"
 import { useTheme } from "@/lib/use-theme"
 import { useAccount, initialsOf } from "@/lib/account"
 import { InstallGuide } from "@/components/install-guide"
+import { nativeShare } from "@/lib/share"
+import { Share2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const goalLabels = { lose: "Lose weight", maintain: "Maintain", gain: "Gain muscle" } as const
@@ -138,6 +141,9 @@ export function ProfileScreen({
       {/* Install as an app — platform-aware PWA tutorial */}
       <InstallGuide />
 
+      {/* Partager l'app — lien /share avec landing dédiée */}
+      <ShareAppCard />
+
       {/* Tools */}
       <Section title="Tools">
         <Row icon={Calculator} label="Calorie calculator" onClick={onOpenCalculator} tone="primary" />
@@ -176,6 +182,37 @@ export function ProfileScreen({
 
       <p className="text-center text-xs text-muted-foreground">Sahtek v2.0.0</p>
     </div>
+  )
+}
+
+/** Carte de partage : lien /share (landing avec install + création de compte). */
+function ShareAppCard() {
+  const [done, setDone] = useState<"shared" | "copied" | "cancelled" | null>(null)
+  const share = async () => {
+    const link = `${window.location.origin}/share?kind=app`
+    const r = await nativeShare({
+      title: "Sahtek — Ton coach nutrition tunisien 🇹🇳",
+      text: "Je suis mes calories avec Sahtek : scan des plats tunisiens, coach en derja, défis entre amis 💪 Rejoins-moi !",
+      url: link,
+    })
+    setDone(r)
+    window.setTimeout(() => setDone(null), 2000)
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void share()}
+      className="flex w-full items-center gap-4 rounded-3xl border border-[#a7f3d0]/15 bg-card p-4 text-left shadow-sm transition-transform active:scale-[0.99]"
+    >
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-xl">🎁</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-extrabold">{done === "copied" ? "Lien copié — colle-le où tu veux !" : done === "shared" ? "Partagé, merci 💚" : "Invite un ami"}</span>
+        <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+          Envoie le lien Sahtek — tes amis arrivent sur une page qui explique l'app et créent leur programme en 2 min.
+        </span>
+      </span>
+      <Share2 className="h-5 w-5 shrink-0 text-primary" />
+    </button>
   )
 }
 

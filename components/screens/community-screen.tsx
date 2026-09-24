@@ -7,6 +7,7 @@ import { useAccount } from "@/lib/account"
 import { useFoodLog } from "@/lib/food-log"
 import { useHealth } from "@/lib/health"
 import { useStreak } from "@/components/use-streak"
+import { shareLink, nativeShare, openInstagramStory, openTikTok } from "@/lib/share"
 import { cn } from "@/lib/utils"
 
 type Recipe = {
@@ -182,102 +183,123 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
   }
 
   /** Generates a branded share card (canvas, Sahtek logo + macros) and opens the Instagram / share sheet. */
-  const shareToInstagram = async (r: Recipe) => {
+  /** Carte story 1080×1920 (Instagram/TikTok) + partage Web Share ou téléchargement. */
+  const shareStoryCard = async (r: Recipe, target: "share" | "insta" | "tiktok") => {
     setSharing(r.id)
     try {
       const canvas = document.createElement("canvas")
       canvas.width = 1080
-      canvas.height = 1080
+      canvas.height = 1920
       const ctx = canvas.getContext("2d")
       if (!ctx) throw new Error("no canvas")
 
-      // Background: dark green aurora-like gradient
-      const bg = ctx.createLinearGradient(0, 0, 1080, 1080)
+      // Fond aurora sombre vertical
+      const bg = ctx.createLinearGradient(0, 0, 1080, 1920)
       bg.addColorStop(0, "#0b0f0d")
       bg.addColorStop(0.55, "#0d1f15")
       bg.addColorStop(1, "#07130d")
       ctx.fillStyle = bg
-      ctx.fillRect(0, 0, 1080, 1080)
-      // soft emerald glow
-      const glow = ctx.createRadialGradient(900, 120, 0, 900, 120, 700)
+      ctx.fillRect(0, 0, 1080, 1920)
+      const glow = ctx.createRadialGradient(880, 220, 0, 880, 220, 800)
       glow.addColorStop(0, "rgba(52, 211, 153, 0.35)")
       glow.addColorStop(1, "rgba(52, 211, 153, 0)")
       ctx.fillStyle = glow
-      ctx.fillRect(0, 0, 1080, 1080)
+      ctx.fillRect(0, 0, 1080, 1920)
 
-      // Logo chip (leaf + SAHTEK)
+      // Header : logo SAHTEK
       ctx.fillStyle = "#34d399"
-      roundRect(ctx, 84, 84, 88, 88, 24)
+      roundRect(ctx, 84, 96, 88, 88, 24)
       ctx.fill()
-      ctx.fillStyle = "#06130c"
       ctx.font = "bold 56px system-ui, sans-serif"
-      ctx.fillText("🌿", 100, 148)
+      ctx.fillStyle = "#06130c"
+      ctx.fillText("🌿", 100, 160)
       ctx.fillStyle = "#e6fff1"
       ctx.font = "bold 52px system-ui, sans-serif"
-      ctx.fillText("SAHTEK", 196, 146)
+      ctx.fillText("SAHTEK", 196, 158)
       ctx.fillStyle = "#8fb5a3"
       ctx.font = "28px system-ui, sans-serif"
-      ctx.fillText("Ton coach nutrition tunisien", 196, 186)
+      ctx.fillText("Ton coach nutrition tunisien", 196, 198)
 
-      // Recipe emoji in a rounded card
+      // Carte emoji centrale
       ctx.fillStyle = "rgba(255,255,255,0.05)"
-      roundRect(ctx, 84, 300, 912, 560, 48)
+      roundRect(ctx, 84, 360, 912, 620, 48)
       ctx.fill()
-      ctx.font = "240px system-ui, sans-serif"
       ctx.textAlign = "center"
-      ctx.fillText(r.emoji, 540, 500)
+      ctx.font = "300px system-ui, sans-serif"
+      ctx.fillText(r.emoji, 540, 640)
 
-      // Title
+      // Titre
       ctx.fillStyle = "#e6fff1"
-      ctx.font = "bold 64px system-ui, sans-serif"
-      const title = r.title.length > 28 ? r.title.slice(0, 27) + "…" : r.title
-      ctx.fillText(title, 540, 660)
+      ctx.font = "bold 68px system-ui, sans-serif"
+      const title = r.title.length > 26 ? r.title.slice(0, 25) + "…" : r.title
+      ctx.fillText(title, 540, 1120)
 
-      // Macros chips
-      ctx.textAlign = "center"
-      ctx.font = "bold 40px system-ui, sans-serif"
+      // Macros
+      ctx.font = "bold 44px system-ui, sans-serif"
       ctx.fillStyle = "#fdba74"
-      ctx.fillText(`${r.calories} kcal`, 260, 780)
+      ctx.fillText(`${r.calories} kcal`, 540, 1210)
+      ctx.font = "bold 38px system-ui, sans-serif"
       ctx.fillStyle = "#93c5fd"
-      ctx.fillText(`P${r.protein}g`, 470, 780)
+      ctx.fillText(`P${r.protein}g`, 330, 1290)
       ctx.fillStyle = "#fcd34d"
-      ctx.fillText(`C${r.carbs}g`, 640, 780)
+      ctx.fillText(`C${r.carbs}g`, 540, 1290)
       ctx.fillStyle = "#c4b5fd"
-      ctx.fillText(`F${r.fat}g`, 810, 780)
+      ctx.fillText(`F${r.fat}g`, 750, 1290)
 
-      // CTA
+      // Auteur + CTA + lien
       ctx.fillStyle = "#a7f3d0"
       ctx.font = "36px system-ui, sans-serif"
-      ctx.fillText(`Recette partagée par ${r.authorName} 💚`, 540, 920)
+      ctx.fillText(`Recette partagée par ${r.authorName} 💚`, 540, 1560)
       ctx.fillStyle = "#8fb5a3"
       ctx.font = "30px system-ui, sans-serif"
-      ctx.fillText("Télécharge Sahtek — lien en bio", 540, 980)
+      ctx.fillText("Télécharge Sahtek 🌿", 540, 1630)
+      ctx.fillStyle = "#34d399"
+      ctx.font = "bold 32px system-ui, sans-serif"
+      const link = shareLink("recipe", { title: r.title, calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat, emoji: r.emoji })
+      const short = link.replace(/^https?:\/\//, "")
+      ctx.fillText(short.length > 44 ? short.slice(0, 43) + "…" : short, 540, 1700)
 
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.92))
       if (!blob) throw new Error("blob")
-      const file = new File([blob], `sahtek-${r.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`, { type: "image/png" })
+      const file = new File([blob], `sahtek-${r.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-story.png`, { type: "image/png" })
 
-      // Instagram first (mobile share sheet when the app exposes it), then generic share, then download.
+      // 1) Partage natif avec fichier — Android propose directement Instagram/TikTok Stories dans la sheet.
       const nav = navigator as Navigator & { canShare?: (d: { files?: File[] }) => boolean }
-      if (nav.canShare && nav.share) {
-        const data = { files: [file], title: r.title, text: `${r.title} — recette healthy partagée sur Sahtek 🌿` }
+      if (target === "share" && nav.canShare && nav.share) {
+        const data = { files: [file], title: r.title, text: `${r.title} — recette healthy partagée sur Sahtek 🌿\n${link}` }
         if (nav.canShare(data)) {
           await nav.share(data)
           return
         }
       }
-      // Fallback: download the card so the user posts it manually
+      // 2) Cible explicite : télécharger la carte puis ouvrir l'app story correspondante.
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
       a.download = file.name
       a.click()
       URL.revokeObjectURL(url)
+      if (target === "insta") await openInstagramStory()
+      if (target === "tiktok") await openTikTok()
+      // 3) Copie le lien de partage dans le presse-papiers (collable en légende).
+      await navigator.clipboard.writeText(link).catch(() => {})
     } catch {
       // share cancelled or unsupported — silent
     } finally {
       setSharing(null)
     }
+  }
+
+  /** Inviter un ami : partage le lien /share (kind=app) via Web Share / presse-papiers. */
+  const shareRecipeLink = async () => {
+    const link = shareLink("recipe", { title: "Recettes healthy tunisiennes" })
+    await nativeShare({ title: "Sahtek 🌿", text: "Rejoins-moi sur Sahtek et partage tes recettes healthy tunisiennes 🇹🇳", url: link })
+  }
+
+  /** Invitation large (tous moyens) : lien /share avec le prénom de l'utilisateur. */
+  const inviteFriends = async () => {
+    const link = shareLink("app", { name: user?.name ?? "Un ami" })
+    await nativeShare({ title: "Sahtek 🇹🇳", text: "Je suis mon objectif nutrition sur Sahtek — rejoins-moi, on se défie 💪\n", url: link })
   }
 
   /** Quick-add a community recipe to the right meal (reuses the food log engine). */
@@ -362,6 +384,14 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
 
         {!loading && tab === "challenges" && (
           <>
+            <button
+              type="button"
+              onClick={() => void inviteFriends()}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 py-3.5 text-sm font-extrabold text-[#e6fff1] ring-1 ring-[#a7f3d0]/15 active:scale-[0.98]"
+            >
+              <Users className="h-4 w-4 text-primary" /> Inviter des amis — défiez-les 🔥
+            </button>
+
             {/* Badges */}
             <section className="mt-4 rounded-3xl border border-[#a7f3d0]/10 bg-card p-4 shadow-sm">
               <h2 className="mb-3 flex items-center gap-2 text-base font-extrabold">
@@ -467,6 +497,14 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
               <Plus className="h-4 w-4" strokeWidth={2.5} /> Partager une recette healthy
             </button>
 
+            <button
+              type="button"
+              onClick={() => void shareRecipeLink()}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#a7f3d0]/15 bg-card py-3 text-sm font-extrabold text-[#e6fff1] active:scale-[0.98]"
+            >
+              <Share2 className="h-4 w-4 text-primary" /> Inviter un ami à ajouter sa recette
+            </button>
+
             {recipes.length === 0 && (
               <div className="mt-8 rounded-3xl border border-dashed border-border p-8 text-center">
                 <ChefHat className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -531,15 +569,27 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
                       <Heart className={cn("h-4 w-4", like.liked && "fill-current")} strokeWidth={2.5} />
                       {like.total > 0 ? like.total : "Like"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void shareToInstagram(r)}
-                      aria-label="Générer la carte Instagram"
-                      className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-fuchsia-500/15 to-amber-400/15 px-3 py-1.5 text-xs font-extrabold text-[#e6fff1]/80 active:scale-90"
-                    >
-                      {sharing === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                      Carte Insta
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => void shareStoryCard(r, "insta")}
+                        aria-label="Générer la carte story Instagram (1080×1920)"
+                        title="Story Instagram — carte téléchargée puis Instagram s'ouvre"
+                        className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-fuchsia-500/15 to-amber-400/15 px-3 py-1.5 text-xs font-extrabold text-[#e6fff1]/80 active:scale-90"
+                      >
+                        {sharing === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                        Story
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void shareStoryCard(r, "tiktok")}
+                        aria-label="Générer la carte story TikTok"
+                        title="Story TikTok — carte téléchargée puis TikTok s'ouvre"
+                        className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-500/15 to-fuchsia-500/15 px-3 py-1.5 text-xs font-extrabold text-[#e6fff1]/80 active:scale-90"
+                      >
+                        🎵
+                      </button>
+                    </div>
                   </div>
                 </article>
                 )

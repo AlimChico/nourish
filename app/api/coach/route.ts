@@ -1,17 +1,11 @@
-import { rateLimit, clientIp, getSessionUserFromToken, SESSION_COOKIE } from "@/lib/server/db"
+import { rateLimit, clientIp } from "@/lib/server/db"
+import { isDerja, DERJA_SYSTEM_RULES, DERJA_INTERJECTIONS } from "@/lib/derja"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 /** Free tier: 3 AI coach chats / day (premium unlimited). */
 const FREE_DAILY_CHATS = 3
-
-function parseCookie(cookie: string, name: string): string | undefined {
-  const m = new RegExp(`(?:^|;\\s*)${name}=([^;]*)`).exec(cookie)
-  return m ? decodeURIComponent(m[1]) : undefined
-}
-
-type ChatMessage = { role: "user" | "assistant"; content: string }
 
 type CoachContext = {
   name?: string
@@ -51,6 +45,7 @@ function buildUserPrompt(ctx: CoachContext): string {
   return lines.join("\n")
 }
 
+/** Fallback local — français. */
 function fallbackAnswer(ctx: CoachContext): string {
   const remaining = ctx.remaining ?? 0
   const pLeft = Math.max(0, (ctx.protein?.target ?? 0) - (ctx.protein?.eaten ?? 0))
@@ -60,11 +55,24 @@ function fallbackAnswer(ctx: CoachContext): string {
   return `Il te reste **${remaining} kcal** et **${pLeft} g de protéines** aujourd'hui. Idéal : une source de protéines maigres (œufs, thon, poulet grillé, yaourt grec) + des légumes. Micro-action : logge ton prochain repas avant de manger pour rester dans le budget 💪`
 }
 
+/** Fallback local — derja tunisienne (arabizi), données réelles du jour. */
+function fallbackAnswerDerja(ctx: CoachContext, name?: string): string {
+  const remaining = ctx.remaining ?? 0
+  const pLeft = Math.max(0, (ctx.protein?.target ?? 0) - (ctx.protein?.eaten ?? 0))
+  const interj = DERJA_INTERJECTIONS[Math.floor(Math.random() * DERJA_INTERJECTIONS.length)]
+  if (remaining <= 0) {
+    return `${interj} ${name ?? "sahbi"}, wesseltna lel budget mta3 l youm (${ctx.targetCalories ?? 0} kcal) 👍 A3mel chwaya machi (15 min) w echreb elma — ghodwa nebdaw nidham.`
+  }
+  return `${interj} Baqi ${remaining} kcal w ${pLeft} g protéines lel youm. El a7san : protéines khfifa (3adam maslou9, ton, djej machwi, rayeb) + slata khadra. Micro-action : sajjel el makla 9bal ma takol, bech tb9a fel budget 💪`
+}
+
 export async function POST(request: Request) {
   const limit = rateLimit(`coach:${clientIp(request)}`, 20, 60 * 1000)
   if (!limit.ok) return Response.json({ error: "Trop de questions — Patiente une minute." }, { status: 429 })
 
-  const body = (await request.json().catch(() => null)) as { context?: CoachContext; freeChatUsed?: number; isPremium?: boolean } | null
+  const body = (await request.json().catch(() => null)) as
+    | { context?: CoachContext; freeChatUsed?: number; isPremium?: boolean; lang?: "fr" | "tn" }
+    | null
   const question = typeof body?.context?.question === "string" ? body.context.question.trim().slice(0, 500) : ""
   if (!question) return Response.json({ error: "Pose ta question d'abord." }, { status: 400 })
 
@@ -74,14 +82,22 @@ export async function POST(request: Request) {
   }
 
   const ctx = body?.context as CoachContext
+  // Derja auto-détection + mode forcé 🇹🇳 (lang === "tn")
+  const lang = body?.lang === "tn" || isDerja(question) ? "tn" : "fr"
   const apiKey = process.env.ANTHROPIC_API_KEY
   const baseUrl = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com"
   const fakeKey = !apiKey || apiKey.length < 20 || apiKey === "admin"
   const proxyBase = /openapis\.online|localhost|127\.0\.0\.1/i.test(baseUrl)
 
   if (fakeKey || proxyBase) {
-    return Response.json({ answer: fallbackAnswer(ctx), source: "fallback" })
+    return Response.json({
+      answer: lang === "tn" ? fallbackAnswerDerja(ctx, ctx.name) : fallbackAnswer(ctx),
+      source: "fallback",
+      lang,
+    })
   }
+
+  const system = lang === "tn" ? `${SYSTEM_PROMPT}\n${DERJA_SYSTEM_RULES}` : SYSTEM_PROMPT
 
   try {
     const controller = new AbortController()
@@ -93,16 +109,30 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 500,
-        system: SYSTEM_PROMPT,
+        system,
         messages: [{ role: "user", content: buildUserPrompt(ctx) }],
       }),
     })
     clearTimeout(timeout)
-    if (!res.ok) return Response.json({ answer: fallbackAnswer(ctx), source: "fallback" })
+    if (!res.ok) {
+      return Response.json({
+        answer: lang === "tn" ? fallbackAnswerDerja(ctx, ctx.name) : fallbackAnswer(ctx),
+        source: "fallback",
+        lang,
+      })
+    }
     const data = (await res.json()) as { content?: { type: string; text?: string }[] }
     const text = (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n").trim()
-    return Response.json({ answer: text || fallbackAnswer(ctx), source: "ai" })
+    return Response.json({
+      answer: text || (lang === "tn" ? fallbackAnswerDerja(ctx, ctx.name) : fallbackAnswer(ctx)),
+      source: "ai",
+      lang,
+    })
   } catch {
-    return Response.json({ answer: fallbackAnswer(ctx), source: "fallback" })
+    return Response.json({
+      answer: lang === "tn" ? fallbackAnswerDerja(ctx, ctx.name) : fallbackAnswer(ctx),
+      source: "fallback",
+      lang,
+    })
   }
 }

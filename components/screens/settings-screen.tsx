@@ -4,8 +4,10 @@ import { useState } from "react"
 import {
   ArrowLeft,
   User,
+  UserMinus,
   Target,
   Bell,
+  BellRing,
   Moon,
   Sun,
   Ruler,
@@ -14,6 +16,7 @@ import {
   Salad,
   ShieldAlert,
   ShieldCheck,
+  ScrollText,
   Trash2,
   Check,
   Info,
@@ -58,7 +61,8 @@ const diets: { key: string; label: string; desc: string; emoji: string }[] = [
 
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const { state, update, targets, wipeAll } = useAccount()
-  const { status } = useSync()
+  const { status, logout } = useSync()
+  const notif = useSmartNotifications()
 
   const wipeEverything = async () => {
     // Server first, then local mirrors.
@@ -67,10 +71,28 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     }
     wipeAll()
   }
+
+  /** Suppression définitive du COMPTE : serveur (cascades) + wipe local + logout. */
+  const deleteAccount = async () => {
+    if (deleting) return
+    setDeleting(true)
+    try {
+      if (status === "authed") {
+        await fetch("/api/sync/delete-account", { method: "POST" }).catch(() => {})
+      }
+      await logout().catch(() => {})
+      wipeAll()
+    } finally {
+      setDeleting(false)
+      setShowDeleteAccount(false)
+    }
+  }
   const { theme, toggle } = useTheme()
-  const notif = useSmartNotifications()
   const [section, setSection] = useState<Section>("root")
   const [confirmWipe, setConfirmWipe] = useState(false)
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleting, setDeleting] = useState(false)
 
   const titles: Record<Section, string> = {
     root: "Settings",
@@ -161,6 +183,24 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 onClick={toggle}
                 trailing={<Toggle on={theme === "dark"} />}
               />
+              {notif.permission === "granted" && state.notifications && (
+                <Row
+                  icon={BellRing}
+                  label="Rappel calories du jour"
+                  desc={notif.digest.enabled ? `Chaque jour à ${notif.digest.hour}h — kcal restantes` : "Désactivé"}
+                  onClick={() => notif.setDigest({ ...notif.digest, enabled: !notif.digest.enabled })}
+                  trailing={<Toggle on={notif.digest.enabled} />}
+                />
+              )}
+              {notif.permission === "granted" && state.notifications && notif.digest.enabled && (
+                <Row
+                  icon={Bell}
+                  label="Heure du rappel"
+                  desc="Entre 12h et 22h"
+                  onClick={() => notif.setDigest({ ...notif.digest, hour: (notif.digest.hour % 10) + 12 })}
+                  trailing={<span className="text-sm font-extrabold text-primary">{notif.digest.hour}:00</span>}
+                />
+              )}
               <Row
                 icon={Bell}
                 label="Notifications"
@@ -186,6 +226,24 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 }
               />
               <Row icon={ShieldCheck} label="Privacy & data" onClick={() => setSection("privacy")} />
+            </Group>
+
+            <Group title="Privacy & legal">
+              <Row
+                icon={ScrollText}
+                label="Politique de confidentialité"
+                desc="Données, pubs, partage, contacts"
+                onClick={() => window.open("/privacy", "_blank")}
+              />
+            </Group>
+
+            <Group title="Compte">
+              <Row
+                icon={UserMinus}
+                label="Supprimer mon compte"
+                desc="Efface données + compte, définitif"
+                onClick={() => setShowDeleteAccount(true)}
+              />
             </Group>
 
             <p className="text-center text-xs text-muted-foreground">
@@ -254,6 +312,51 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
+
+      {/* Modale : suppression définitive du compte */}
+      {showDeleteAccount && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 px-5 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-destructive/30 bg-card p-6 shadow-2xl">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/15 text-destructive">
+              <UserMinus className="h-6 w-6" />
+            </span>
+            <h2 className="mt-4 text-lg font-extrabold text-destructive">Supprimer définitivement ton compte ?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Ton compte, ton journal alimentaire, ton Premium et tout ton historique seront effacés du serveur et de
+              cet appareil. <strong className="text-foreground">C'est irréversible.</strong>
+            </p>
+            <p className="mt-3 text-xs font-semibold text-muted-foreground">
+              Tape "SUPPRIMER" pour confirmer :
+            </p>
+            <input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="SUPPRIMER"
+              className="mt-1.5 w-full rounded-xl border-2 border-destructive/40 bg-background px-3 py-2.5 text-sm font-bold outline-none focus:border-destructive"
+            />
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteAccount(false)
+                  setDeleteConfirmText("")
+                }}
+                className="rounded-xl bg-muted py-3 text-sm font-bold"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmText.trim().toUpperCase() !== "SUPPRIMER" || deleting}
+                onClick={() => void deleteAccount()}
+                className="rounded-xl bg-destructive py-3 text-sm font-extrabold text-[#e6fff1] disabled:opacity-40"
+              >
+                {deleting ? "…" : "Supprimer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

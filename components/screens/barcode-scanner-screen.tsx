@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { BrowserMultiFormatReader } from "@zxing/browser"
 import type { IScannerControls } from "@zxing/browser"
+import { DecodeHintType, BarcodeFormat } from "@zxing/library"
 import { X, ScanLine, Loader2, Plus, Minus, Check, AlertTriangle, Camera, BarChart3 } from "lucide-react"
 import { useFoodLog, mealMeta, type MealKey, type FoodItem } from "@/lib/food-log"
 import { targetForTime } from "@/lib/meal-scan"
@@ -90,7 +91,42 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
     stopScanner() // never double-start the camera
     try {
       const reader = new BrowserMultiFormatReader()
-      const controls = await reader.decodeFromVideoDevice(undefined, videoRef.current!, (result) => {
+      // Limite aux formats produits (plus rapide) + TRY_HARDER pour les codes peu contrastés
+      const hints = new Map<DecodeHintType, unknown>()
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.CODE_128,
+      ])
+      hints.set(DecodeHintType.TRY_HARDER, true)
+      reader.setHints(hints as never)
+      // Caméra ARRIÈRE obligatoire (selfie cam ne voit pas les codes) + focus continu
+      let deviceId: string | undefined
+      try {
+        const devices = await BrowserMultiFormatReader.listVideoInputDevices()
+        const backs = devices.filter((d) =>
+          /back|rear|arrière|environment|camera 2|camera 0/i.test(d.label ?? ""),
+        )
+        deviceId = backs[0]?.deviceId ?? undefined
+      } catch {
+        // fallback: default device
+      }
+      const stream = deviceId
+        ? await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          })
+        : await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          })
+      try {
+        const track = stream.getVideoTracks()[0]
+        await track.applyConstraints({ advanced: [{ focusMode: "continuous" } as unknown as MediaTrackConstraintSet] }).catch(() => {})
+      } catch {
+        // focus control unsupported
+      }
+      const controls = await reader.decodeFromStream(stream, videoRef.current!, (result) => {
         if (!result) return
         const code = result.getText()
         if (code === lastCodeRef.current) return
@@ -286,7 +322,7 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         <div className="relative flex-1 overflow-hidden">
-          <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" muted playsInline />
+          <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" muted playsInline autoPlay />
           {/* Frame overlay */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="relative h-40 w-72 max-w-[80%]">
@@ -306,7 +342,7 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
                 <Loader2 className="h-4 w-4 animate-spin" /> Recherche du produit…
               </span>
             ) : (
-              "Aligne le code-barres dans le cadre"
+              "Tenez le code à 15-25 cm, cadre bien droit"
             )}
           </p>
 

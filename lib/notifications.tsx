@@ -27,6 +27,24 @@ type Store = {
   enable: () => Promise<void>
   lastNudge: string | null
   rules: Rules
+  /** Rappel quotidien du budget calories (heure 12-22, désactivable). */
+  digest: { enabled: boolean; hour: number }
+  setDigest: (d: { enabled: boolean; hour: number }) => void
+}
+
+const DIGEST_KEY = "nourish.digest.v1"
+const DEFAULT_DIGEST = { enabled: true, hour: 20 }
+
+function loadDigest(): { enabled: boolean; hour: number } {
+  try {
+    const raw = localStorage.getItem(DIGEST_KEY)
+    if (!raw) return DEFAULT_DIGEST
+    const p = JSON.parse(raw) as { enabled: boolean; hour: number }
+    if (typeof p.enabled !== "boolean" || typeof p.hour !== "number") return DEFAULT_DIGEST
+    return { enabled: p.enabled, hour: Math.min(Math.max(Math.round(p.hour), 12), 22) }
+  } catch {
+    return DEFAULT_DIGEST
+  }
 }
 
 const Context = createContext<Store | null>(null)
@@ -37,12 +55,23 @@ export function SmartNotificationsProvider({ children }: { children: React.React
   const { today: health, hydrated: healthReady } = useHealth()
   const [permission, setPermission] = useState<Store["permission"]>("unsupported")
   const [lastNudge, setLastNudge] = useState<string | null>(null)
+  const [digest, setDigestState] = useState<Store["digest"]>(DEFAULT_DIGEST)
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
       setPermission(Notification.permission)
     }
+    setDigestState(loadDigest())
   }, [])
+
+  const setDigest = (d: Store["digest"]) => {
+    setDigestState(d)
+    try {
+      localStorage.setItem(DIGEST_KEY, JSON.stringify(d))
+    } catch {
+      // storage full
+    }
+  }
 
   const streak = useMemo(() => {
     // Same definition as Progress: consecutive logged days ending today.
@@ -107,13 +136,42 @@ export function SmartNotificationsProvider({ children }: { children: React.React
       if (rules.inactive) fired("inactive")
       if (rules.lunchMissing) fired("lunch")
       if (rules.dinnerMissing) fired("dinner")
+
+      // Rappel QUOTIDIEN du budget calories (configurable dans Réglages).
+      if (digest.enabled) {
+        const h = new Date().getHours()
+        if (h >= digest.hour && h < 23) {
+          const stampKey = "nourish.nudge.digest"
+          const today = new Date().toISOString().slice(0, 10)
+          try {
+            if (window.localStorage.getItem(stampKey) !== today) {
+              window.localStorage.setItem(stampKey, today)
+              const eatenCal = Math.round(dayTotals(state.meals).calories)
+              const left = Math.max(0, targets.calories - eatenCal)
+              const over = eatenCal > targets.calories
+              new Notification(
+                over ? `🧊 ${eatenCal - targets.calories} kcal au-dessus du budget` : `🍽️ Il te reste ${left} kcal aujourd'hui`,
+                {
+                  body: over
+                    ? `Journée à ${eatenCal} kcal pour ${targets.calories} visées — une marche et hop, on repart demain !`
+                    : `${eatenCal}/${targets.calories} kcal consommées. ${left > 300 ? "De la place pour un dîner équilibré 🥗" : "Léger dîner conseillé 🍲"}`,
+                  tag: "nourish-digest",
+                },
+              )
+              setLastNudge("digest")
+            }
+          } catch {
+            // storage unavailable
+          }
+        }
+      }
     }
 
     evaluate()
     const id = window.setInterval(evaluate, 5 * 60_000)
     return () => window.clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [permission, rules, logReady, accountReady, healthReady])
+  }, [permission, rules, logReady, accountReady, healthReady, digest])
 
   const notify = (key: string) => {
     const messages: Record<string, { title: string; body: string }> = {
@@ -159,7 +217,7 @@ export function SmartNotificationsProvider({ children }: { children: React.React
     }
   }
 
-  return <Context.Provider value={{ permission, enable, lastNudge, rules }}>{children}</Context.Provider>
+  return <Context.Provider value={{ permission, enable, lastNudge, rules, digest, setDigest }}>{children}</Context.Provider>
 }
 
 function dayTotals(meals: unknown): { calories: number } {

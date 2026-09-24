@@ -74,6 +74,14 @@ export function OnboardingFlow() {
   const [resetDone, setResetDone] = useState(false)
   const [loginEmail, setLoginEmail] = useState("")
   const [loginPassword, setLoginPassword] = useState("")
+  // OAuth Google/Apple : boutons affichés seulement si configuré côté Vercel
+  const [oauth, setOauth] = useState<{ google: boolean; apple: boolean }>({ google: false, apple: false })
+  useEffect(() => {
+    fetch("/api/auth/oauth/status")
+      .then((r) => r.json())
+      .then((d: { google?: boolean; apple?: boolean }) => setOauth({ google: !!d.google, apple: !!d.apple }))
+      .catch(() => {})
+  }, [])
 
   // Account
   const [name, setName] = useState(saved.name)
@@ -223,10 +231,42 @@ export function OnboardingFlow() {
             {step + 1}/{STEPS - 1}
           </span>
         </div>
-      )}
-
-      <div className="flex flex-1 flex-col overflow-y-auto no-scrollbar px-6 pb-8">
-        {step === 0 && !loginMode && <WelcomeStep />}
+      )}        <div className="flex flex-1 flex-col overflow-y-auto no-scrollbar px-6 pb-8">
+        {step === 0 && !loginMode && (
+          <>
+            <WelcomeStep />
+            {(oauth.google || oauth.apple) && (
+              <div className="mt-4 flex flex-col gap-2">
+                {oauth.google && (
+                  <a
+                    href="/api/auth/oauth/google"
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-card py-3.5 text-sm font-bold text-foreground transition-transform active:scale-[0.98]"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
+                      <path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.2H12v4.1h6.5c-.1 1.1-.8 2.7-2.4 3.8l3.8 3c2.3-2.1 3.6-5.2 3.6-8.7z" />
+                      <path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-3c-1 .7-2.4 1.2-4.1 1.2-3.2 0-5.8-2.1-6.8-5l-3.9 3C3.3 21.3 7.3 24 12 24z" />
+                      <path fill="#FBBC05" d="M5.2 14.3c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3l-4-3.1C.4 8.2 0 10 0 12s.4 3.8 1.3 5.4l3.9-3.1z" />
+                      <path fill="#EA4335" d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.3 0 3.3 2.7 1.3 6.6l4 3.1C6.2 6.8 8.8 4.7 12 4.7z" />
+                    </svg>
+                    Continuer avec Google
+                  </a>
+                )}
+                {oauth.apple && (
+                  <a
+                    href="/api/auth/oauth/apple"
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl bg-black py-3.5 text-sm font-bold text-white ring-1 ring-white/20 transition-transform active:scale-[0.98]"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
+                      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+                    </svg>
+                    Continuer avec Apple
+                  </a>
+                )}
+                <p className="text-center text-[11px] font-semibold text-muted-foreground">ou avec ton e-mail</p>
+              </div>
+            )}
+          </>
+        )}
         {step === 0 && loginMode && !resetMode && (
           <LoginStep
             email={loginEmail}
@@ -434,10 +474,30 @@ function WelcomeStep() {
         <span className="text-xl font-extrabold tracking-tight">Sahtek</span>
       </div>
       <h1 className="mt-6 text-balance text-4xl font-extrabold leading-[1.1] tracking-tight">
-        Your health journey starts here
+        Mange sain, reste toi — même avec un régime tunisien 🇹🇳
       </h1>
       <p className="mt-4 text-pretty text-base leading-relaxed text-muted-foreground">
-        Answer a few questions, get a personalized program, then create your account. Everything is saved on this device.
+        2 minutes pour créer ton programme : calories, protéines, eau — calculé pour <em>toi</em>, avec ta vraie cuisine
+        (couscous, lablabi, chorba…).
+      </p>
+      {/* Preuve sociale + bénéfices concrets — retient l'utilisateur dès la 1re seconde */}
+      <div className="mt-7 grid grid-cols-2 gap-3">
+        {[
+          { e: "📷", t: "Scan ton assiette", d: "Calories en 5 secondes, sans peser" },
+          { e: "🇹🇳", t: "Coach en derja", d: "Il connaît lablabi & brik au four" },
+          { e: "🔥", t: "Streak & défis", d: "Rester constant devient un jeu" },
+          { e: "📊", t: "Suis tes progrès", d: "Poids, macros, hydratation" },
+        ].map((f) => (
+          <div key={f.t} className="rounded-2xl border border-[#a7f3d0]/10 bg-card p-3.5">
+            <span className="text-xl">{f.e}</span>
+            <p className="mt-1.5 text-sm font-extrabold leading-tight">{f.t}</p>
+            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{f.d}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+        <Sparkles className="h-3.5 w-3.5 text-primary" />
+        100 % gratuit pour commencer — aucun engagement.
       </p>
     </div>
   )

@@ -8,6 +8,7 @@ import { useHealth } from "@/lib/health"
 import { usePremium } from "@/lib/premium"
 import { useWeight } from "@/lib/weight"
 import { useStreak } from "@/components/use-streak"
+import { DERJA_SUGGESTIONS } from "@/lib/derja"
 import { cn } from "@/lib/utils"
 
 const FREE_DAILY_CHATS = 3
@@ -40,6 +41,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [usedToday, setUsedToday] = useState(0)
+  const [tunisianMode, setTunisianMode] = useState(false) // 🇹🇳 derja toggle
   const endRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -107,9 +109,10 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
           },
           freeChatUsed: usedToday,
           isPremium,
+          lang: tunisianMode ? "tn" : undefined,
         }),
       })
-      const data = (await res.json().catch(() => null)) as { answer?: string; error?: string; quota?: boolean } | null
+      const data = (await res.json().catch(() => null)) as { answer?: string; error?: string; quota?: boolean; lang?: "fr" | "tn" } | null
       if (!res.ok || !data?.answer) {
         setError(data?.error ?? "Réponse indisponible — réessaie.")
         return
@@ -152,9 +155,24 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
             </p>
           </div>
         </div>
-        <button type="button" onClick={onClose} aria-label="Fermer le coach" className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
-          <X className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTunisianMode((v) => !v)}
+            aria-pressed={tunisianMode}
+            aria-label="Mode derja tunisienne"
+            title="Réponds en derja tunisienne 🇹🇳"
+            className={cn(
+              "flex h-9 items-center gap-1 rounded-full px-2.5 text-sm font-extrabold transition-all active:scale-90",
+              tunisianMode ? "bg-primary/25 text-primary ring-2 ring-primary/50" : "bg-muted text-muted-foreground",
+            )}
+          >
+            🇹🇳
+          </button>
+          <button type="button" onClick={onClose} aria-label="Fermer le coach" className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
@@ -162,9 +180,11 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
         {messages.length === 0 && (
           <div className="mt-6 rounded-3xl border border-[#a7f3d0]/10 bg-card p-5 text-center">
             <span className="text-4xl">🧠</span>
-            <p className="mt-3 font-extrabold">Pose ta question, je connais ta journée</p>
+            <p className="mt-3 font-extrabold">{tunisianMode ? "سولني، نعرف نهارك متاعك" : "Pose ta question, je connais ta journée"}</p>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Je vois tes {remaining} kcal restantes, tes protéines, ton eau, tes pas et ton streak — demande-moi quoi en faire.
+              {tunisianMode
+                ? "A7kili bel derja — nchouf el kcal el ba9iya, el protéines, el ma w el pas mta3ek w ngoulek chnowa ta3mel."
+                : "Je vois tes " + remaining + " kcal restantes, tes protéines, ton eau, tes pas et ton streak — demande-moi quoi en faire."}
             </p>
           </div>
         )}
@@ -196,14 +216,17 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
       {/* Suggestions */}
       {messages.length === 0 && !busy && (
         <div className="flex snap-x gap-2 overflow-x-auto no-scrollbar px-5 pb-2 sm:px-6">
-          {SUGGESTIONS.map((s) => (
+          {(tunisianMode
+            ? DERJA_SUGGESTIONS.map((s) => ({ label: s.label, question: s.question }))
+            : SUGGESTIONS.map((s) => ({ label: s, question: s }))
+          ).map((s) => (
             <button
-              key={s}
+              key={s.label}
               type="button"
-              onClick={() => void send(s)}
+              onClick={() => void send(s.question)}
               className="shrink-0 snap-start rounded-full border border-[#a7f3d0]/15 bg-card px-3.5 py-2 text-xs font-bold text-muted-foreground active:scale-95"
             >
-              {s}
+              {s.label}
             </button>
           ))}
         </div>
@@ -229,7 +252,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={quotaLeft === 0 ? "Reviens demain ou passe Premium…" : "Ta question…"}
+            placeholder={quotaLeft === 0 ? "Reviens demain ou passe Premium…" : tunisianMode ? "سولني بالدرجة… 🇹🇳" : "Ta question…"}
             disabled={busy || quotaLeft === 0}
             maxLength={500}
             className="flex-1 rounded-2xl bg-muted px-4 py-3 text-sm font-medium outline-none placeholder:text-muted-foreground disabled:opacity-50"
