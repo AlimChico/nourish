@@ -2,6 +2,7 @@
 
 import { Home, Utensils, TrendingUp, Dumbbell, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { haptic } from "@/lib/haptic"
 
 export type TabKey = "home" | "food" | "progress" | "workout" | "profile"
 
@@ -33,7 +34,10 @@ export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab
             <button
               key={t.key}
               type="button"
-              onClick={() => onChange(t.key)}
+              onClick={() => {
+                haptic("light")
+                onChange(t.key)
+              }}
               aria-current={isActive ? "page" : undefined}
               className="group relative flex min-h-[56px] min-w-0 flex-1 flex-col items-center justify-center rounded-[1.3rem] py-2 transition-transform duration-150 active:scale-90 sm:min-h-[60px] sm:py-2.5"
             >

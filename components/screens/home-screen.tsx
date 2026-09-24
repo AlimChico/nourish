@@ -25,6 +25,7 @@ import { useHealth } from "@/lib/health"
 import { useStreak } from "@/components/use-streak"
 import { AdSlot, AD_SLOTS } from "@/components/ad-slot"
 import { cn } from "@/lib/utils"
+import { haptic } from "@/lib/haptic"
 
 const dayKeyOf = (d: Date) => d.toISOString().slice(0, 10)
 
@@ -382,7 +383,10 @@ export function HomeScreen({
                 </div>
                 <button
                   type="button"
-                  onClick={() => addWater(-1)}
+                  onClick={() => {
+                    haptic("light")
+                    addWater(-1)
+                  }}
                   aria-label="Remove a glass of water"
                   className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-foreground active:scale-90 sm:h-8 sm:w-8"
                 >
@@ -390,7 +394,10 @@ export function HomeScreen({
                 </button>
                 <button
                   type="button"
-                  onClick={() => addWater(1)}
+                  onClick={() => {
+                    haptic("success")
+                    addWater(1)
+                  }}
                   aria-label="Add a glass of water"
                   className="flex h-7 w-7 items-center justify-center rounded-md bg-water text-[#e6fff1] active:scale-95 sm:h-8 sm:w-8"
                 >

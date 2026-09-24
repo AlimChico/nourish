@@ -9,6 +9,12 @@ const manrope = Manrope({
 })
 
 export const metadata: Metadata = {
+  // Base pour les images Open Graph / canonical — VERCEL_URL est fournie
+  // automatiquement par Vercel en production (et preview).
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'),
+  ),
   title: 'Sahtek — Your Health. Our Priority.',
   description:
     'Track your nutrition, reach your goals, and become a healthier version of yourself.',
@@ -19,8 +25,11 @@ export const metadata: Metadata = {
         url: '/icon.svg',
         type: 'image/svg+xml',
       },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
-    apple: '/icon.svg',
+    // iOS : carré plein 180×180 — iOS applique lui-même ses coins arrondis
+    apple: '/apple-touch-icon.png',
   },
   manifest: '/manifest.webmanifest',
   appleWebApp: {
@@ -43,6 +52,10 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // Android Chrome : quand le clavier s'ouvre (chat, formulaires), la fenêtre
+  // est redimensionnée au lieu de faire glisser le viewport par-dessus —
+  // les inputs restent visibles et le layout ne saute pas.
+  interactiveWidget: 'resizes-content',
 }
 
 const themeInit = `try{var t=localStorage.getItem('nourish.theme.v1');var d=t!=='light';var r=document.documentElement;r.classList.toggle('dark',d);r.classList.toggle('light',!d)}catch(e){}`

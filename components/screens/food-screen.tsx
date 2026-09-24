@@ -384,11 +384,11 @@ function CustomFoodCreator({ onCreate }: { onCreate: (f: Omit<CustomFood, "categ
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Recipe name" className="col-span-2 rounded-xl bg-muted px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground" />
-        <input value={calories} onChange={(e) => setCalories(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="Calories (kcal)" className="rounded-xl bg-muted px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground" />
+        <input value={calories} onChange={(e) => setCalories(e.target.value.replace(/\D/g, ""))} inputMode="numeric" pattern="[0-9]*" placeholder="Calories (kcal)" className="rounded-xl bg-muted px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground" />
         <input value={serving} onChange={(e) => setServing(e.target.value)} placeholder="Serving (1 portion)" className="rounded-xl bg-muted px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground" />
-        <input value={protein} onChange={(e) => setProtein(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="Protein (g)" className="rounded-xl bg-muted px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground" />
-        <input value={carbs} onChange={(e) => setCarbs(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="Carbs (g)" className="rounded-xl bg-muted px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground" />
-        <input value={fat} onChange={(e) => setFat(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="Fat (g)" className="rounded-xl bg-muted px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground" />
+        <input value={protein} onChange={(e) => setProtein(e.target.value.replace(/\D/g, ""))} inputMode="numeric" pattern="[0-9]*" placeholder="Protein (g)" className="rounded-xl bg-muted px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground" />
+        <input value={carbs} onChange={(e) => setCarbs(e.target.value.replace(/\D/g, ""))} inputMode="numeric" pattern="[0-9]*" placeholder="Carbs (g)" className="rounded-xl bg-muted px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground" />
+        <input value={fat} onChange={(e) => setFat(e.target.value.replace(/\D/g, ""))} inputMode="numeric" pattern="[0-9]*" placeholder="Fat (g)" className="rounded-xl bg-muted px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground" />
       </div>
       <button
         type="button"

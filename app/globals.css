@@ -201,6 +201,37 @@
   }
 }
 
+/*
+ * Téléphones : le zoom auto d'iOS déclenche quand un input a font-size < 16px.
+ * On force 16px sur tous les champs de saisie en mobile (< 480px) pour que le
+ * clavier n'agrandisse jamais toute la page au tap. Au-delà (tablette/desktop)
+ * on garde la taille typographique d'origine.
+ */
+@media (max-width: 29.99rem) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/*
+ * Réactivité tactile : supprime le délai de 300ms historique et le highlight
+ * de tap du navigateur (déjà masqué côté shell) sur tout élément interactif.
+ * double-tap-zoom reste disponible sur les textes, pas sur les contrôles.
+ */
+@layer base {
+  button,
+  a,
+  [role="button"],
+  input[type="submit"],
+  label:has(> input),
+  summary {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 /* Aurora wallpaper behind the phone frame (like the reference image:
    emerald beams top-right and left on near-black green). */
 @utility aurora-bg {
@@ -271,6 +302,19 @@
 .stagger > *:nth-child(6) { animation-delay: 225ms; }
 .stagger > *:nth-child(7) { animation-delay: 270ms; }
 .stagger > *:nth-child(8) { animation-delay: 315ms; }
+
+/*
+ * Scroll fluide sur mobile : le rubber-banding horizontal n'existe plus et le
+ * défilement vertical garde toute sa netteté (utile pour les listes longues).
+ */
+@layer base {
+  html {
+    overscroll-behavior-y: none;
+  }
+  ::selection {
+    background: rgb(52 211 153 / 0.3);
+  }
+}
 
 /* Respect users who prefer reduced motion */
 @media (prefers-reduced-motion: reduce) {

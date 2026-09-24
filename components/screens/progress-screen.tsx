@@ -11,6 +11,7 @@ import { useWeight } from "@/lib/weight"
 import { useStreak } from "@/components/use-streak"
 import { AdSlot, AD_SLOTS } from "@/components/ad-slot"
 import { cn } from "@/lib/utils"
+import { haptic } from "@/lib/haptic"
 
 const ranges = ["7 days", "30 days", "90 days"] as const
 type RangeKey = (typeof ranges)[number]
@@ -216,7 +217,10 @@ export function ProgressScreen() {
           />
           <button
             type="button"
-            onClick={saveWeight}
+            onClick={() => {
+              haptic("success")
+              saveWeight()
+            }}
             disabled={!weightInput}
             className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-40 active:scale-95"
           >

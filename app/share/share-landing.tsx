@@ -85,7 +85,11 @@ export function ShareLanding() {
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[#8fb5a3]">
           {isRecipe
-            ? `${data?.title ?? "Recette healthy"} — ${data?.calories ?? "?"} kcal · P${data?.protein ?? "?"} C${data?.carbs ?? "?"} F${data?.fat ?? "?"}. Crée ton compte pour l'ajouter à ton journal !`
+            ? `${data?.title ?? "Recette healthy"} — ${data?.calories ?? ""} kcal${
+                data?.protein != null || data?.carbs != null || data?.fat != null
+                  ? ` · P${data?.protein ?? 0} C${data?.carbs ?? 0} F${data?.fat ?? 0}`
+                  : ""
+              }. Crée ton compte pour l'ajouter à ton journal !`
             : isProgress
               ? `🔥 ${data?.streak ?? 0} jours de streak, objectif nutrition en cours. Crée ton programme perso en 2 minutes.`
               : `${inviter ?? "Un ami"} t'invite à suivre tes calories, scanner tes plats tunisiens et devenir une version plus saine de toi-même.`}

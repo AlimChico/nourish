@@ -4,8 +4,17 @@
  *  - Pages: network-first with cache fallback (fresh when online, usable offline).
  *  - API: never cached (user data must stay fresh).
  */
-const CACHE = "sahtek-v1"
-const SHELL = ["/", "/icon.svg", "/manifest.webmanifest"]
+const CACHE = "sahtek-v2"
+const SHELL = [
+  "/",
+  "/icon.svg",
+  "/manifest.webmanifest",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/icon-maskable-192.png",
+  "/icons/icon-maskable-512.png",
+  "/apple-touch-icon.png",
+]
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -27,7 +36,12 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || url.pathname.startsWith("/api/")) return
 
   // Static assets: cache-first.
-  if (url.pathname.startsWith("/_next/static") || url.pathname === "/icon.svg") {
+  if (
+    url.pathname.startsWith("/_next/static") ||
+    url.pathname === "/icon.svg" ||
+    url.pathname.startsWith("/icons/") ||
+    url.pathname === "/apple-touch-icon.png"
+  ) {
     event.respondWith(
       caches.match(event.request).then(
         (hit) =>
