@@ -154,6 +154,8 @@ export function OnboardingFlow() {
     stepGoal,
     calorieOverride: null,
     notifications: true,
+    digestEnabled: true,
+    digestHour: 20,
     diet,
     allergies: selectedAllergies,
   })

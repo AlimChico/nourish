@@ -20,6 +20,10 @@ export type AccountState = {
   stepGoal: number // steps / day
   calorieOverride: number | null // manual daily calorie target (null = auto from BMR/TDEE)
   notifications: boolean
+  /** Rappel calories quotidien côté serveur (Web Push) — dupliqué du réglage local pour le cron. */
+  digestEnabled: boolean
+  /** Heure du rappel (fuseau Tunis), 12–22. */
+  digestHour: number
   diet: Diet
   allergies: string[]
   onboarded: boolean
@@ -42,6 +46,8 @@ export const DEFAULT_ACCOUNT: AccountState = {
   stepGoal: 10000,
   calorieOverride: null,
   notifications: true,
+  digestEnabled: true,
+  digestHour: 20,
   diet: "none",
   allergies: [],
   onboarded: false,
@@ -75,6 +81,8 @@ export function normalizeAccount(raw: unknown): AccountState {
         ? clamp(Math.round(s.calorieOverride), 800, 6000)
         : null,
     notifications: typeof s.notifications === "boolean" ? s.notifications : true,
+    digestEnabled: typeof (s as { digestEnabled?: unknown }).digestEnabled === "boolean" ? (s as { digestEnabled: boolean }).digestEnabled : true,
+    digestHour: clamp(Math.round(Number((s as { digestHour?: unknown }).digestHour) || DEFAULT_ACCOUNT.digestHour), 12, 22),
     diet:
       s.diet === "vegetarian" || s.diet === "vegan" || s.diet === "pescatarian" || s.diet === "halal"
         ? s.diet

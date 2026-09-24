@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { MobileFrame } from "@/components/mobile-frame"
 import { BottomNav, type TabKey } from "@/components/bottom-nav"
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow"
@@ -27,11 +27,33 @@ import { WeightProvider } from "@/lib/weight"
 
 type Overlay = "none" | "calculator" | "premium" | "scan" | "barcode" | "settings" | "community" | "coach"
 
+const TAB_ORDER: TabKey[] = ["home", "food", "progress", "workout", "profile"]
+
 function App() {
   const { state, hydrated, logout } = useAccount()
   const { logout: serverLogout } = useSync()
   const [tab, setTab] = useState<TabKey>("home")
   const [overlay, setOverlay] = useState<Overlay>("none")
+
+  // Swipe horizontal pour changer d'onglet (mobile). Ignoré quand le geste
+  // démarre sur un carrousel horizontal (suggestions coach, macros…).
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0]
+    touchStart.current = { x: t.clientX, y: t.clientY }
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current
+    touchStart.current = null
+    if (!start) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (Math.abs(dx) < 70 || Math.abs(dy) > 50) return
+    const idx = TAB_ORDER.indexOf(tab)
+    if (dx < 0 && idx < TAB_ORDER.length - 1) setTab(TAB_ORDER[idx + 1]!)
+    if (dx > 0 && idx > 0) setTab(TAB_ORDER[idx - 1]!)
+  }
 
   if (!hydrated) return null
 
@@ -45,7 +67,12 @@ function App() {
 
   return (
     <MobileFrame>
-      <main key={tab} className="flex-1 overflow-y-auto no-scrollbar animate-slide-up">
+      <main
+        key={tab}
+        className="flex-1 overflow-y-auto no-scrollbar animate-slide-up"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         <CommunityFoodLogBridge />
         {tab === "home" && (
           <HomeScreen

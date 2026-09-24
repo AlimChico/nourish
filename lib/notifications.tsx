@@ -51,7 +51,7 @@ const Context = createContext<Store | null>(null)
 
 export function SmartNotificationsProvider({ children }: { children: React.ReactNode }) {
   const { state, hydrated: logReady } = useFoodLog()
-  const { state: account, targets, hydrated: accountReady } = useAccount()
+  const { state: account, targets, hydrated: accountReady, update: updateAccount } = useAccount()
   const { today: health, hydrated: healthReady } = useHealth()
   const [permission, setPermission] = useState<Store["permission"]>("unsupported")
   const [lastNudge, setLastNudge] = useState<string | null>(null)
@@ -71,7 +71,23 @@ export function SmartNotificationsProvider({ children }: { children: React.React
     } catch {
       // storage full
     }
+    // Miroir dans le compte → synchronisé vers le serveur pour le cron Web Push.
+    updateAccount({ digestEnabled: d.enabled, digestHour: d.hour })
   }
+
+  // Première visite : adopte l'heure du compte (qui a priorité sur les appareils
+  // sans préférence locale) — le localStorage reste ensuite la préférence locale.
+  useEffect(() => {
+    if (!accountReady) return
+    try {
+      if (!localStorage.getItem(DIGEST_KEY)) {
+        setDigestState({ enabled: account.digestEnabled, hour: account.digestHour })
+      }
+    } catch {
+      // storage unavailable
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountReady])
 
   const streak = useMemo(() => {
     // Same definition as Progress: consecutive logged days ending today.

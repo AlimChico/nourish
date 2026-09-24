@@ -28,6 +28,7 @@ import {
 import { useAccount, type Gender, type Goal } from "@/lib/account"
 import { useSync } from "@/lib/sync"
 import { useSmartNotifications } from "@/lib/notifications"
+import { usePushNotifications } from "@/lib/push"
 import { activityLevels } from "@/lib/nutrition-data"
 import { useTheme } from "@/lib/use-theme"
 import { cn } from "@/lib/utils"
@@ -63,6 +64,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const { state, update, targets, wipeAll } = useAccount()
   const { status, logout } = useSync()
   const notif = useSmartNotifications()
+  const push = usePushNotifications()
 
   const wipeEverything = async () => {
     // Server first, then local mirrors.
@@ -226,6 +228,27 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 }
               />
               <Row icon={ShieldCheck} label="Privacy & data" onClick={() => setSection("privacy")} />
+              {push.supported && push.configured && (
+                <Row
+                  icon={BellRing}
+                  label="Rappel même app fermée"
+                  desc={
+                    push.loading
+                      ? "…"
+                      : push.subscribed
+                        ? "Push activé sur cet appareil — à l'heure choisie"
+                        : "Active le push pour recevoir le rappel app fermée"
+                  }
+                  onClick={() => (push.subscribed ? void push.unsubscribe() : void push.subscribe())}
+                  trailing={
+                    push.loading ? (
+                      <span className="text-xs font-bold text-muted-foreground">…</span>
+                    ) : (
+                      <Toggle on={push.subscribed} />
+                    )
+                  }
+                />
+              )}
             </Group>
 
             <Group title="Privacy & legal">

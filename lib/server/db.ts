@@ -149,6 +149,15 @@ async function makePostgres(url: string) {
     created_at BIGINT NOT NULL,
     PRIMARY KEY (recipe_id, user_id)
   )`
+  await sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint TEXT PRIMARY KEY,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    last_sent_date TEXT NOT NULL DEFAULT ''
+  )`
+  await sql`CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)`
   return sql
 }
 
@@ -243,6 +252,12 @@ CREATE TABLE IF NOT EXISTS recipe_likes (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at INTEGER NOT NULL, PRIMARY KEY (recipe_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, endpoint TEXT PRIMARY KEY,
+  p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL,
+  last_sent_date TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
 `)
 }
 
@@ -355,6 +370,59 @@ export const db = {
       return
     }
     sqlite!.prepare("DELETE FROM sessions WHERE token_hash = ?").run(tokenHash)
+  },
+
+  // ----- push subscriptions (Web Push digest) -----
+
+  async upsertPushSubscription(userId: string, endpoint: string, p256dh: string, auth: string): Promise<void> {
+    const now = Date.now()
+    if (usingPostgres) {
+      await sql`INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at, last_sent_date)
+        VALUES (${userId}, ${endpoint}, ${p256dh}, ${auth}, ${now}, '')
+        ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, last_sent_date = ''`
+      return
+    }
+    sqlite!
+      .prepare(
+        `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at, last_sent_date) VALUES (?, ?, ?, ?, ?, '')
+         ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, last_sent_date = ''`,
+      )
+      .run(userId, endpoint, p256dh, auth, now)
+  },
+
+  async deletePushSubscription(endpoint: string): Promise<void> {
+    if (usingPostgres) {
+      await sql`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`
+      return
+    }
+    sqlite!.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(endpoint)
+  },
+
+  async listPushSubscriptions(): Promise<
+    { userId: string; endpoint: string; p256dh: string; auth: string; lastSentDate: string }[]
+  > {
+    if (usingPostgres) {
+      const rows = await sql`SELECT user_id, endpoint, p256dh, auth, last_sent_date FROM push_subscriptions`
+      return rows.map((r) => ({
+        userId: r.user_id as string,
+        endpoint: r.endpoint as string,
+        p256dh: r.p256dh as string,
+        auth: r.auth as string,
+        lastSentDate: r.last_sent_date as string,
+      }))
+    }
+    const rows = sqlite!
+      .prepare("SELECT user_id, endpoint, p256dh, auth, last_sent_date FROM push_subscriptions")
+      .all() as { user_id: string; endpoint: string; p256dh: string; auth: string; last_sent_date: string }[]
+    return rows.map((r) => ({ userId: r.user_id, endpoint: r.endpoint, p256dh: r.p256dh, auth: r.auth, lastSentDate: r.last_sent_date }))
+  },
+
+  async markPushSent(endpoint: string, date: string): Promise<void> {
+    if (usingPostgres) {
+      await sql`UPDATE push_subscriptions SET last_sent_date = ${date} WHERE endpoint = ${endpoint}`
+      return
+    }
+    sqlite!.prepare("UPDATE push_subscriptions SET last_sent_date = ? WHERE endpoint = ?").run(date, endpoint)
   },
 
   // ----- key/value-ish stores (account, health as JSON blobs; day_logs per date)
