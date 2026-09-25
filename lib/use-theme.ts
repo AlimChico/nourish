@@ -23,6 +23,9 @@ export function useTheme() {
     const root = document.documentElement
     root.classList.toggle("dark", theme === "dark")
     root.classList.toggle("light", theme === "light")
+    // La zone système (barre de statut, Dynamic Island, home indicator) doit
+    // toujours porter la couleur exacte du fond de l'app — sinon bandes.
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#0b0f0d" : "#f2faf6")
     try {
       window.localStorage.setItem(KEY, theme)
     } catch {

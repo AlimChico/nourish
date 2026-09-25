@@ -82,7 +82,10 @@
 
 :root {
   color-scheme: light;
-  --background: oklch(0.98 0.008 160);
+  /* Hex exact (et non oklch) : html { background-color: var(--background) } et la
+     meta theme-color doivent porter EXACTEMENT la même valeur que les surfaces —
+     sinon les zones système (viewport-fit=cover) créent des bandes de couleur. */
+  --background: #f2faf6;
   --foreground: oklch(0.24 0.03 165);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.24 0.03 165);
@@ -175,6 +178,11 @@
     /* Le scroll vit dans les conteneurs internes (main/overlays), jamais le body
        — sinon Safari iOS déplace les éléments fixed pendant le scroll élastique. */
     height: 100%;
+    /* Fond explicite NON transparent, exactement celui de l'app pour le thème
+       courant. Avec viewport-fit=cover, les zones système (barre de statut,
+       Dynamic Island, home indicator) prennent CETTE couleur → rendu plein
+       écran homogène « vraie app », aucune bande claire/sombre en haut/bas. */
+    background-color: var(--background);
   }
   body {
     @apply bg-background text-foreground;

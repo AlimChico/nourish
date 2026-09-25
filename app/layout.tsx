@@ -40,9 +40,9 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  // #0b0f0d = fond de l'app (globals.css .dark) : la barre de statut système et
-  // la zone Dynamic Island (iPhone 14 Pro → 18) prennent la couleur du thème
-  // — plus aucun bandeau noir au-dessus du header.
+  // #0b0f0d = couleur EXACTE du fond de l'app (aurora-bg) : la barre de statut,
+  // la zone Dynamic Island et le home indicator prennent la couleur de l'app
+  // → rendu plein écran homogène « vraie app », sans bande de couleur différente.
   themeColor: '#0b0f0d',
   // viewport-fit=cover : le contenu s'étend sous l'encoche/la barre d'accueil,
   // et env(safe-area-inset-*) devient réel — MobileFrame + BottomNav s'en servent
@@ -58,7 +58,7 @@ export const viewport: Viewport = {
   interactiveWidget: 'resizes-content',
 }
 
-const themeInit = `try{var t=localStorage.getItem('nourish.theme.v1');var d=t!=='light';var r=document.documentElement;r.classList.toggle('dark',d);r.classList.toggle('light',!d)}catch(e){}`
+const themeInit = `try{var t=localStorage.getItem('nourish.theme.v1');var d=t!=='light';var r=document.documentElement;r.classList.toggle('dark',d);r.classList.toggle('light',!d);var m=document.querySelector('meta[name=theme-color]');if(m){m.setAttribute('content',d?'#0b0f0d':'#f2faf6')}}catch(e){}`
 
 export default function RootLayout({
   children,
