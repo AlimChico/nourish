@@ -133,7 +133,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         <h1 className="text-lg font-extrabold tracking-tight">{titles[section]}</h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-10 pt-4 sm:px-6">
+      <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-4 pt-4 sm:px-6 sm:pb-6">
         {section === "root" && (
           <div className="flex flex-col gap-5">
             {/* identity card */}

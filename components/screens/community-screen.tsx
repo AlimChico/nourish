@@ -668,7 +668,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
             </div>
             {formError && <p className="text-center text-sm font-semibold text-destructive">{formError}</p>}
           </div>
-          <div className="border-t border-border bg-card px-5 pb-8 pt-4 sm:px-6 sm:pb-10">
+          <div className="border-t border-border bg-card px-5 pt-4 sm:px-6 sm:pb-10" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
             <button
               type="button"
               onClick={() => void shareRecipe()}

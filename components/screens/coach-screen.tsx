@@ -241,7 +241,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
       )}
 
       {/* Input */}
-      <div className="border-t border-border bg-card px-4 pb-8 pt-3 sm:px-6 sm:pb-10">
+      <div className="border-t border-border bg-card px-4 pt-3 sm:px-6 sm:pb-10" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}>
         <form
           onSubmit={(e) => {
             e.preventDefault()

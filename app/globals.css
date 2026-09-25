@@ -172,9 +172,25 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    /* Le scroll vit dans les conteneurs internes (main/overlays), jamais le body
+       — sinon Safari iOS déplace les éléments fixed pendant le scroll élastique. */
+    height: 100%;
   }
   body {
     @apply bg-background text-foreground;
+    height: 100%;
+    overflow: hidden;
+  }
+  /* Fallback anciens moteurs sans dvh (Safari < 15.4, Chrome Android ancien) :
+     le shell prend 100% de la fenêtre via html/body height:100%. Les navigateurs
+     récents utilisent 100dvh (meilleure gestion de la barre d'URL Safari). */
+  .phone-shell {
+    height: 100%;
+  }
+  @supports (height: 100dvh) {
+    .phone-shell {
+      height: 100dvh;
+    }
   }
 }
 

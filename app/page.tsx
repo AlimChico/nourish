@@ -83,7 +83,7 @@ function App() {
       {splash && <SplashScreen onDone={hideSplash} />}
       <main
         key={tab}
-        className="flex-1 overflow-y-auto no-scrollbar animate-slide-up"
+        className="flex-1 overflow-y-auto no-scrollbar animate-slide-up pb-[calc(env(safe-area-inset-bottom,0px)+92px)] sm:pb-28"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
@@ -119,7 +119,7 @@ function App() {
           type="button"
           onClick={() => setOverlay("barcode")}
           aria-label="Scanner un aliment"
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+112px)] right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(52,211,153,0.45)] ring-4 ring-[#0b0f0d] transition-transform active:scale-90 sm:hidden"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+84px)] right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(52,211,153,0.45)] ring-4 ring-[#0b0f0d] transition-transform active:scale-90 sm:hidden"
         >
           <ScanLine className="h-6 w-6" strokeWidth={2.2} />
         </button>

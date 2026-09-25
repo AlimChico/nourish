@@ -123,7 +123,7 @@ export function HomeScreen({
   }, [state.date, state.history, state.meals, totals.calories, healthState.days])
 
   return (
-    <div className="aurora-glow mx-auto flex w-full flex-col gap-4 px-4 pb-10 pt-2 sm:gap-5 sm:px-6">
+    <div className="aurora-glow mx-auto flex w-full flex-col gap-4 px-4 pb-4 pt-2 sm:gap-5 sm:px-6 sm:pb-6">
       {/* Greeting */}
       <header className="flex items-center justify-between pt-1">
         <div className="min-w-0">

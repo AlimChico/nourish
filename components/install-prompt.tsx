@@ -85,7 +85,7 @@ export function InstallPrompt() {
     <>
       {/* Native Chromium/Android install dialog */}
       {bipEvent && (
-        <div className="animate-slide-up fixed inset-x-3 bottom-24 z-50 mx-auto max-w-md rounded-3xl border border-[#a7f3d0]/15 bg-[#0d1a13]/95 p-4 shadow-[0_16px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+        <div className="animate-slide-up fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+156px)] z-50 mx-auto max-w-md rounded-3xl border border-[#a7f3d0]/15 bg-[#0d1a13]/95 p-4 shadow-[0_16px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl">
           <div className="flex items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
               <Download className="h-5 w-5" />
@@ -126,7 +126,7 @@ export function InstallPrompt() {
 
       {/* iOS banner (no native prompt available on Safari) */}
       {showIOS && !bipEvent && (
-        <div className="animate-slide-up fixed inset-x-3 bottom-24 z-50 mx-auto max-w-md overflow-hidden rounded-3xl border border-[#a7f3d0]/15 bg-[#0d1a13]/95 shadow-[0_16px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+        <div className="animate-slide-up fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+156px)] z-50 mx-auto max-w-md overflow-hidden rounded-3xl border border-[#a7f3d0]/15 bg-[#0d1a13]/95 shadow-[0_16px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl">
           <button
             type="button"
             onClick={() => setIosOpen((o) => !o)}
