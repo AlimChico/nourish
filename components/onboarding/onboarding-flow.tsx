@@ -205,7 +205,7 @@ export function OnboardingFlow() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background sm:min-h-0 sm:flex-1">
+    <div className="flex h-full flex-col bg-background sm:min-h-0 sm:flex-1">
       {step <= STEPS - 2 && (
         <div className="flex items-center gap-3 px-6 pb-2 pt-3">
           {step > 0 && (

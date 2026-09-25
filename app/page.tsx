@@ -83,7 +83,7 @@ function App() {
       {splash && <SplashScreen onDone={hideSplash} />}
       <main
         key={tab}
-        className="min-h-0 flex-1 overflow-y-auto no-scrollbar animate-slide-up pb-[calc(env(safe-area-inset-bottom,0px)+92px)] sm:pb-28"
+        className="min-h-0 flex-1 overflow-y-auto no-scrollbar pb-[calc(env(safe-area-inset-bottom,0px)+92px)] sm:pb-28"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >

@@ -73,7 +73,7 @@ export function ShareLanding() {
   }
 
   return (
-    <main className="aurora-bg flex min-h-dvh flex-col items-center justify-center px-6 py-10">
+    <main className="aurora-bg flex h-full flex-col items-center justify-center overflow-y-auto px-6 py-10">
       <div className="w-full max-w-md rounded-[2rem] bg-[#0b0f0d]/90 p-7 text-center shadow-2xl ring-1 ring-[#a7f3d0]/10 backdrop-blur">
         <span className="text-5xl">{data?.emoji ?? "🥗"}</span>
         <h1 className="mt-3 text-2xl font-black tracking-tight text-[#e6fff1]">

@@ -181,18 +181,28 @@
     height: 100%;
     overflow: hidden;
   }
-  /* Hauteur du shell : 100% de la chaîne html/body (fallback universel), puis
-     100svh quand le navigateur le supporte — svh = PETIT viewport : hauteur
-     CONSTANTE même quand la barre d'URL Safari se cache en scrollant, donc la
-     barre de navigation ancrée au shell ne bouge jamais. (dvh, lui, se
-     redimensionne à chaque collapsage de barre d'URL → tout se décale.) */
-  .phone-shell {
-    height: 100%;
-  }
-  @supports (height: 100svh) {
-    .phone-shell {
-      height: 100svh;
-    }
+  /* Sur téléphone, la hauteur vient de .app-viewport (fixed, ci-dessous) —
+     aucune unité vh. Tablette : fallbacks dans .sm\:phone-shell. */
+}
+
+/*
+ * Viewport applicatif — LE pattern anti-bugs Safari iOS :
+ * position:fixed + inset:0 = hauteur = celle de la fenêtre, TOUJOURS, sans
+ * aucune dépendance à vh/dvh/svh (qui se redimensionnent avec la barre d'URL
+ * Safari et varient selon les moteurs). Le contenu scrolle uniquement dans
+ * <main> (overflow-y:auto + min-height:0 + momentum -webkit-overflow-scrolling).
+ * Tablette : on annule (carte flottante, pas de barre d'URL mobile).
+ */
+.app-viewport {
+  position: fixed;
+  inset: 0;
+  display: flex;
+}
+@media (min-width: 30rem) {
+  .app-viewport {
+    position: static;
+    inset: auto;
+    min-height: 100%;
   }
 }
 
@@ -206,6 +216,7 @@
   main,
   .overflow-y-auto {
     min-height: 0;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
