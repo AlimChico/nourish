@@ -20,12 +20,12 @@ const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
  */
 export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab: TabKey) => void }) {
   return (
-    // Barre flottante décollée du bas : elle ne touche plus le bord de l'écran.
-    // - iPhone 15/16/17/18 : pb = safe-area (home indicator, ~34px) + 18px de marge
-    //   visible → la pill flotte nettement au-dessus du geste Accueil.
-    // - Android/desktop sans safe-area : 18px de marge quand même.
-    // - Tablette (sm) : marge encore plus généreuse (2rem + safe-area).
-    <div className="pointer-events-none sticky bottom-0 z-30 w-full px-3 pt-2.5 pb-[calc(env(safe-area-inset-bottom)+18px)] sm:px-6 sm:pt-3 sm:pb-[calc(env(safe-area-inset-bottom)+2rem)]">
+    // Barre flottante stable, nettement remontée : elle ne touche jamais le bord
+    // bas et reste visible en permanence dès l'ouverture du dashboard.
+    // - iPhone 15/16/17/18 : safe-area (home indicator ~34px) + 28px → ~62px d'air.
+    // - Android/desktop sans safe-area : 28px de marge quand même.
+    // - Tablette (sm) : marge 2rem + safe-area.
+    <div className="pointer-events-none sticky bottom-0 z-30 w-full shrink-0 px-3 pt-2.5 pb-[calc(env(safe-area-inset-bottom)+28px)] sm:px-6 sm:pt-3 sm:pb-[calc(env(safe-area-inset-bottom)+2rem)]">
       <nav
         aria-label="Main navigation"
         className="pointer-events-auto mx-auto flex w-full max-w-md items-stretch rounded-[1.55rem] border border-[#a7f3d0]/15 bg-[#0d1a13]/90 shadow-[0_18px_44px_rgba(0,0,0,0.55),0_4px_12px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(167,243,208,0.07)] backdrop-blur-xl"
