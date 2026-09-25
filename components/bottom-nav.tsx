@@ -34,10 +34,21 @@ const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
  */
 export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab: TabKey) => void }) {
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 w-full px-3 pb-[calc(env(safe-area-inset-bottom,0px)+14px)] pt-2.5 sm:absolute sm:inset-x-0 sm:bottom-0 sm:z-30 sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] sm:pt-3">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 w-full px-3 sm:absolute sm:inset-x-0 sm:bottom-0 sm:z-30 sm:px-6 sm:pt-3">
+      {/* Rideau dégradé derrière la barre (mobile) : opacifie progressivement le
+          contenu qui passe dessous jusqu'au bord de l'écran — plus rien n'est
+          lisible sous la pilule, et le fond reste celui de l'app. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[150%] -z-10 sm:hidden"
+        style={{
+          background: "linear-gradient(to top, var(--background) 62%, transparent 100%)",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        }}
+      />
       <nav
         aria-label="Main navigation"
-        className="pointer-events-auto mx-auto flex w-full max-w-md items-stretch rounded-[1.55rem] border border-[#a7f3d0]/15 bg-[#0d1a13]/90 shadow-[0_18px_44px_rgba(0,0,0,0.55),0_4px_12px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(167,243,208,0.07)] backdrop-blur-xl"
+        className="pointer-events-auto mx-auto mb-[calc(env(safe-area-inset-bottom,0px)+14px)] mt-2.5 flex w-full max-w-md items-stretch rounded-[1.55rem] border border-[#a7f3d0]/15 bg-[#0d1a13]/90 shadow-[0_18px_44px_rgba(0,0,0,0.55),0_4px_12px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(167,243,208,0.07)] backdrop-blur-xl sm:mb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] sm:mt-0"
       >
         {tabs.map((t) => {
           const Icon = t.icon

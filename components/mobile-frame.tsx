@@ -21,7 +21,10 @@ export function MobileFrame({ children, className }: { children: React.ReactNode
     <div className="app-viewport aurora-bg safe-x justify-center">
       <div
         className={cn(
-          "relative mx-auto flex h-full w-full flex-col overflow-hidden bg-background safe-top overscroll-none",
+          // aurora-glow sur TOUT le shell (y compris la zone safe-top) : le fond
+          // est continu de la barre de statut jusqu'au home indicator — plus de
+          // bande noire entre la barre de statut et le contenu.
+          "relative mx-auto flex h-full w-full flex-col overflow-hidden bg-background aurora-glow safe-top overscroll-none",
           "rounded-b-[1.4rem]",
           "sm:phone-shell sm:my-auto sm:h-[94dvh] sm:max-h-[68rem] sm:w-[min(100vw-2.5rem,52rem)] sm:items-stretch sm:rounded-[2.5rem]",
           "lg:w-[min(92vw,60rem)]",
