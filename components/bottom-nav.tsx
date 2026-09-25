@@ -27,6 +27,10 @@ const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
  *
  * - Tablette/desktop (≥ 480px) : ancrée au bas du shell flottant (absolute),
  *   marge plus généreuse.
+ *
+ * Note hauteur : le shell utilise 100svh (hauteur du PETIT viewport, constante
+ * même quand la barre d'URL Safari se cache) → la barre reste à la MÊME endroit
+ * en permanence, jamais de saut ni de décalage.
  */
 export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab: TabKey) => void }) {
   return (

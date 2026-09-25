@@ -181,15 +181,17 @@
     height: 100%;
     overflow: hidden;
   }
-  /* Fallback anciens moteurs sans dvh (Safari < 15.4, Chrome Android ancien) :
-     le shell prend 100% de la fenêtre via html/body height:100%. Les navigateurs
-     récents utilisent 100dvh (meilleure gestion de la barre d'URL Safari). */
+  /* Hauteur du shell : 100% de la chaîne html/body (fallback universel), puis
+     100svh quand le navigateur le supporte — svh = PETIT viewport : hauteur
+     CONSTANTE même quand la barre d'URL Safari se cache en scrollant, donc la
+     barre de navigation ancrée au shell ne bouge jamais. (dvh, lui, se
+     redimensionne à chaque collapsage de barre d'URL → tout se décale.) */
   .phone-shell {
     height: 100%;
   }
-  @supports (height: 100dvh) {
+  @supports (height: 100svh) {
     .phone-shell {
-      height: 100dvh;
+      height: 100svh;
     }
   }
 }
