@@ -84,7 +84,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html:
               process.env.NODE_ENV === 'production'
-                ? `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}`
+                ? `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').then(function(reg){function ping(){reg.update().catch(function(){})}ping();setInterval(ping,3600000);var had=!!navigator.serviceWorker.controller;navigator.serviceWorker.addEventListener('controllerchange',function(){if(had){setTimeout(function(){location.reload()},50)}had=true})}).catch(function(){})})}`
                 : `if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister()})});if(window.caches){caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k)})})}}`,
           }}
         />

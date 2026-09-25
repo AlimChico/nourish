@@ -197,6 +197,19 @@
 }
 
 /*
+ * Scroll flexbox Safari iOS : un enfant flex avec overflow-y:auto doit avoir
+ * min-height:0 (ou min-width:0), sinon il DÉPASSE son conteneur au lieu de
+ * scroller — Chrome tolère, Safari pas. C'est LE bug « impossible de scroller
+ * en bas sur iPhone ». On l'applique aux conteneurs de scroll flex connus.
+ */
+@layer utilities {
+  main,
+  .overflow-y-auto {
+    min-height: 0;
+  }
+}
+
+/*
  * Safe-area (encoche / barre de statut iOS) — appliquées aux conteneurs communs
  * et aux overlays plein écran. Sur tablette (carte flottante ≥ 480px) l'encoche
  * ne s'applique plus : reset via media query, cohérent avec --breakpoint-sm.

@@ -298,7 +298,7 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
       ) : (
         /* ---------- Review ---------- */
         <div className="flex flex-1 flex-col overflow-hidden sm:mx-auto sm:w-full sm:max-w-2xl">
-          <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-6">
+          <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-5 pb-6">
             {result?.thumbnail && (
               <div className="relative mt-2 overflow-hidden rounded-3xl">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
