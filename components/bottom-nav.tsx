@@ -35,15 +35,14 @@ const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
 export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab: TabKey) => void }) {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 w-full px-3 sm:absolute sm:inset-x-0 sm:bottom-0 sm:z-30 sm:px-6 sm:pt-3">
-      {/* Rideau dégradé derrière la barre (mobile) : opacifie progressivement le
-          contenu qui passe dessous jusqu'au bord de l'écran — plus rien n'est
-          lisible sous la pilule, et le fond reste celui de l'app. */}
+      {/* Rideau dégradé discret (mobile) : estompe le contenu qui passe sous la
+          barre. Court et doux — comme le fond est désormais uniforme en bas,
+          la zone sous la pilule se confond avec l'app : invisible. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[150%] -z-10 sm:hidden"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[115%] -z-10 sm:hidden"
         style={{
-          background: "linear-gradient(to top, var(--background) 62%, transparent 100%)",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          background: "linear-gradient(to top, var(--background) 52%, transparent 100%)",
         }}
       />
       <nav

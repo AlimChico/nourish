@@ -290,11 +290,13 @@
    emerald beams top-right and left on near-black green). */
 @utility aurora-bg {
   background-color: #0b0f0d;
+  /* Pas de halo en bas : le bas de l'app est uniforme (#0b0f0d) pour que la zone
+     du home indicator et le rideau sous la barre de navigation s'y confondent
+     au pixel — rendu « invisible », aucune bande distincte. */
   background-image:
     radial-gradient(52% 38% at 88% -6%, rgb(52 211 153 / 0.5), transparent 62%),
     radial-gradient(46% 34% at 96% 38%, rgb(22 163 74 / 0.32), transparent 65%),
     radial-gradient(55% 42% at -8% 62%, rgb(52 211 153 / 0.4), transparent 62%),
-    radial-gradient(40% 30% at 12% 96%, rgb(167 243 208 / 0.14), transparent 70%),
     radial-gradient(70% 60% at 50% 45%, rgb(10 61 46 / 0.55), transparent 75%);
 }
 
