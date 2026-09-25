@@ -38,7 +38,14 @@ function productToFood(p: OFFProduct, servings: number): FoodItem {
   }
 }
 
-export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
+export function BarcodeScannerScreen({
+  onClose,
+  onOpenMealScan,
+}: {
+  onClose: () => void
+  /** « Prendre une photo » — estimation IA du plat quand il n'y a pas de code-barres. */
+  onOpenMealScan: () => void
+}) {
   const { addFood } = useFoodLog()
   const [phase, setPhase] = useState<Phase>("scanning")
   const [error, setError] = useState<string | null>(null)
@@ -47,8 +54,10 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
   const [meal, setMeal] = useState<MealKey>(targetForTime)
   const [logged, setLogged] = useState(false)
   const [manualCode, setManualCode] = useState("")
+  const [manualError, setManualError] = useState("")
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const controlsRef = useRef<IScannerControls | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const lastCodeRef = useRef<string>("")
   const busyRef = useRef(false)
 
@@ -60,6 +69,11 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
       const res = await fetch(`/api/barcode?code=${encodeURIComponent(code)}`)
       const data = (await res.json().catch(() => null)) as { product?: OFFProduct; error?: string } | null
       if (data?.product) {
+        // Produit trouvé : on coupe la caméra immédiatement (économie batterie).
+        controlsRef.current?.stop()
+        controlsRef.current = null
+        streamRef.current?.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
         setProduct(data.product)
         setServings(1)
         setLogged(false)
@@ -73,7 +87,7 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
         setPhase("error")
       }
     } catch {
-      setError("Connexion impossible — réessaie.")
+      setError("Connexion impossible — réessaie (ou scanne plus tard hors-ligne avec la photo).")
       setPhase("error")
     } finally {
       busyRef.current = false
@@ -83,6 +97,8 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
   const stopScanner = useCallback(() => {
     controlsRef.current?.stop()
     controlsRef.current = null
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
   }, [])
 
   const startScanner = useCallback(async () => {
@@ -90,8 +106,8 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
     lastCodeRef.current = ""
     stopScanner() // never double-start the camera
     try {
-      const reader = new BrowserMultiFormatReader()
-      // Limite aux formats produits (plus rapide) + TRY_HARDER pour les codes peu contrastés
+      // Hints passés au constructeur : formats produits uniquement → détection
+      // plus rapide et plus fiable (EAN-13/EAN-8/UPC-A/UPC-E/CODE-128).
       const hints = new Map<DecodeHintType, unknown>()
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [
         BarcodeFormat.EAN_13,
@@ -101,7 +117,7 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
         BarcodeFormat.CODE_128,
       ])
       hints.set(DecodeHintType.TRY_HARDER, true)
-      reader.setHints(hints as never)
+      const reader = new BrowserMultiFormatReader(hints as never)
       // Caméra ARRIÈRE obligatoire (selfie cam ne voit pas les codes) + focus continu
       let deviceId: string | undefined
       try {
@@ -120,6 +136,8 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
         : await navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
           })
+      // On garde le stream : si decodeFromStream échoue, il faut couper la caméra.
+      streamRef.current = stream
       try {
         const track = stream.getVideoTracks()[0]
         await track.applyConstraints({ advanced: [{ focusMode: "continuous" } as unknown as MediaTrackConstraintSet] }).catch(() => {})
@@ -135,7 +153,8 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
       })
       controlsRef.current = controls
     } catch {
-      setError("Caméra inaccessible. Autorise l'accès ou entre le code à la main.")
+      stopScanner()
+      setError("Caméra inaccessible. Autorise l'accès, prends une photo du produit ou entre le code à la main.")
       setPhase("error")
     }
   }, [lookup, stopScanner])
@@ -164,7 +183,6 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
     setManualError("")
     void lookup(code)
   }
-  const [manualError, setManualError] = useState("")
 
   const add = () => {
     if (!product) return
@@ -336,7 +354,7 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
               )}
             </div>
           </div>
-          <p className="absolute inset-x-0 bottom-32 text-center text-sm font-bold text-[#e6fff1] drop-shadow">
+          <p className="absolute inset-x-0 bottom-44 text-center text-sm font-bold text-[#e6fff1] drop-shadow sm:bottom-40">
             {phase === "lookup" ? (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> Recherche du produit…
@@ -347,7 +365,7 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
           </p>
 
           {error && (
-            <div className="absolute inset-x-5 bottom-40 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4">
+            <div className="absolute inset-x-5 bottom-52 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4 sm:bottom-48">
               <p className="flex items-start gap-2 text-sm font-semibold text-amber-300">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 {error}
@@ -362,8 +380,16 @@ export function BarcodeScannerScreen({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {/* Manual entry */}
-          <div className="absolute inset-x-5 bottom-10">
+          {/* Photo IA + saisie manuelle */}
+          <div className="absolute inset-x-5 bottom-10 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={onOpenMealScan}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-[#a7f3d0]/20 bg-secondary py-3.5 text-sm font-bold text-secondary-foreground backdrop-blur transition-transform active:scale-[0.98]"
+            >
+              <Camera className="h-5 w-5 text-primary" />
+              Prendre une photo du plat — estimation IA
+            </button>
             <form
               onSubmit={(e) => {
                 e.preventDefault()

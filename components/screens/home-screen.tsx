@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react"
 import {
-  Camera,
   ChevronDown,
   Minus,
   Plus,
@@ -17,6 +16,8 @@ import {
   Sparkles,
 } from "lucide-react"
 import { AnimatedCounter } from "@/components/animated-counter"
+import { ProgressRing } from "@/components/progress-ring"
+import { OfflineBanner } from "@/components/offline-banner"
 import { macroMeta, type MacroKey } from "@/lib/nutrition-data"
 import { dayTotals, mealMeta, mealOrder, totalsFor, useFoodLog, type MealKey } from "@/lib/food-log"
 import { suggestRecipes } from "@/lib/food-requests"
@@ -65,12 +66,10 @@ function motivationFor({
 
 export function HomeScreen({
   onAddFood,
-  onOpenScan,
   onOpenSettings,
   onOpenCoach,
 }: {
   onAddFood: (meal?: MealKey) => void
-  onOpenScan: () => void
   onOpenSettings: () => void
   onOpenCoach?: () => void
 }) {
@@ -154,99 +153,81 @@ export function HomeScreen({
         </div>
       </header>
 
-      {/* Weekly streak tracker — real user data */}
-      <StreakCard streak={streak} weekDays={weekDays} />
+      {/* Hors-ligne : tout est gardé en local, synchro au retour du réseau */}
+      <OfflineBanner />
 
-      {/* Compact calories card */}
-      <section className="rounded-3xl border border-[#a7f3d0]/10 bg-card p-5 shadow-sm sm:p-6">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+      {/* HERO — calories restantes : la carte principale, anneau de progression */}
+      <section className="relative overflow-hidden rounded-[1.9rem] border border-[#a7f3d0]/12 bg-gradient-to-b from-[#11251b] to-[#0d1a13] p-5 shadow-[0_18px_44px_rgba(0,0,0,0.4)] sm:p-6">
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-center sm:gap-12 lg:gap-16">
+          <ProgressRing
+            value={eaten}
+            max={Math.max(target, 1)}
+            strokeWidth={13}
+            className="w-48 shrink-0 sm:w-44 lg:w-52"
+            trackClassName="text-[#a7f3d0]/10"
+            progressClassName={isOver ? "text-destructive" : "text-calories"}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
               {isOver ? "Over budget" : "Remaining"}
             </p>
-            <p className="mt-1 flex items-baseline gap-1.5">
-              <span
-                className={cn(
-                  "text-[clamp(1.875rem,6vw,2.75rem)] font-black tabular-nums tracking-tight",
-                  isOver ? "text-destructive" : "text-calories",
-                )}
-              >
-                <AnimatedCounter value={isOver ? eaten - target : remaining} />
-              </span>
-              <span className="text-sm font-bold text-muted-foreground">kcal</span>
+            <p
+              className={cn(
+                "mt-0.5 text-[clamp(2rem,7vw,2.6rem)] font-black leading-none tabular-nums tracking-tight",
+                isOver ? "text-destructive" : "text-[#e6fff1]",
+              )}
+            >
+              <AnimatedCounter value={isOver ? eaten - target : remaining} />
             </p>
-          </div>
-          <div className="pb-1 text-right">
-            <p className="text-lg font-extrabold tabular-nums leading-none">
-              {eaten.toLocaleString()}
-              <span className="text-sm font-semibold text-muted-foreground"> / {target.toLocaleString()}</span>
+            <p className="mt-1 text-xs font-bold text-muted-foreground">kcal</p>
+            <p className="mt-2 rounded-full bg-muted/60 px-2.5 py-1 text-[10px] font-bold tabular-nums text-muted-foreground">
+              {eaten.toLocaleString()} / {target.toLocaleString()} eaten
             </p>
-            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">kcal eaten / goal</p>
+          </ProgressRing>
+
+          {/* Quick stats — real numbers only, verticales à côté de l'anneau sur tablette */}
+          <div className="grid w-full grid-cols-3 gap-2 sm:w-40 sm:shrink-0 sm:grid-cols-1 sm:gap-2.5">
+            <QuickStat icon={<Flame className="h-3.5 w-3.5" />} tone="text-fat" label="Burn" value={`${burn} kcal`} />
+            <QuickStat
+              icon={<Footprints className="h-3.5 w-3.5" />}
+              tone="text-steps"
+              label="Steps"
+              value={health.steps.toLocaleString()}
+            />
+            <QuickStat
+              icon={<Droplets className="h-3.5 w-3.5" />}
+              tone="text-water"
+              label="Water"
+              value={`${state.water}/${targets.water}`}
+            />
           </div>
         </div>
 
-        {/* Progress bar — orange while on track, red past the goal */}
-        <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-muted">
-          {isOver ? (
-            <div className="h-full w-full rounded-full bg-destructive" />
-          ) : (
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-calories to-calories-bright transition-all duration-700 ease-out"
-              style={{ width: `${pct}%` }}
-            />
-          )}
-        </div>
-        <p className="mt-1.5 text-[11px] font-semibold text-muted-foreground">
+        <p className="mt-4 text-center text-[11px] font-semibold text-muted-foreground sm:text-left">
           {isOver
             ? `${(eaten - target).toLocaleString()} kcal above your daily goal`
             : `${pct.toFixed(0)}% of today's ${target.toLocaleString()} kcal goal`}
         </p>
-
-        {/* Quick stats — real numbers only */}
-        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-3">
-          <QuickStat icon={<Flame className="h-3.5 w-3.5" />} tone="text-fat" label="Burn" value={`${burn} kcal`} />
-          <QuickStat
-            icon={<Footprints className="h-3.5 w-3.5" />}
-            tone="text-steps"
-            label="Steps"
-            value={health.steps.toLocaleString()}
-          />
-          <QuickStat
-            icon={<Droplets className="h-3.5 w-3.5" />}
-            tone="text-water"
-            label="Water"
-            value={`${state.water}/${targets.water}`}
-          />
-        </div>
       </section>
 
-      {/* Macros — 3 mini cards côte à côte, plus larges sur tablette */}
-      <section className="grid grid-cols-3 gap-2.5 sm:gap-4">
+      {/* Weekly streak tracker — real user data */}
+      <StreakCard streak={streak} weekDays={weekDays} />
+
+      {/* Macros — 3 mini cards compactes, plus larges sur tablette */}
+      <section className="grid grid-cols-3 gap-2 sm:gap-3.5">
         {(Object.keys(macroMeta) as MacroKey[]).map((key) => (
           <MacroMini key={key} macroKey={key} value={Math.round(totals[key])} target={targets[key]} />
         ))}
       </section>
 
-      {/* Add food CTA + scan shortcut */}
-      <div className="grid grid-cols-[1fr_auto] gap-2.5">
-        <button
-          type="button"
-          onClick={() => onAddFood()}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-base font-bold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-[0.98]"
-        >
-          <Plus className="h-5 w-5" strokeWidth={2.5} />
-          Add food
-        </button>
-        <button
-          type="button"
-          onClick={onOpenScan}
-          aria-label="Scan a meal"
-          className="flex items-center justify-center gap-2 rounded-2xl border border-[#a7f3d0]/15 bg-secondary px-5 py-3.5 text-base font-bold text-secondary-foreground transition-transform active:scale-[0.98]"
-        >
-          <Camera className="h-5 w-5 text-primary" />
-          Scan
-        </button>
-      </div>
+      {/* Add food CTA — le scan a son propre bouton flottant (FAB), toujours visible */}
+      <button
+        type="button"
+        onClick={() => onAddFood()}
+        className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-base font-bold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] sm:mx-auto sm:w-full sm:max-w-sm"
+      >
+        <Plus className="h-5 w-5" strokeWidth={2.5} />
+        Add food
+      </button>
 
       {/* Today's meals */}
       <section>
@@ -482,14 +463,27 @@ function StreakCard({ streak, weekDays }: { streak: number; weekDays: WeekDay[] 
             <span
               aria-hidden
               className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black transition-all sm:h-9 sm:w-9",
-                d.isFuture && "border border-dashed border-border bg-transparent text-transparent",
-                !d.isFuture && !d.complete && d.isToday && "border-2 border-primary/80 text-transparent shadow-[0_0_12px_rgba(52,211,153,0.25)]",
-                !d.isFuture && !d.complete && !d.isToday && "bg-muted",
+                "flex h-8 w-8 items-center justify-center rounded-full transition-all sm:h-9 sm:w-9",
+                // Jour futur : cercle pointillé vide
+                d.isFuture && "border border-dashed border-border text-transparent",
+                // Jour passé manqué : cercle vide discret
+                !d.isFuture && !d.complete && !d.isToday && "border border-muted-foreground/30 bg-transparent text-transparent",
+                // Jour réussi : rempli + coché
                 d.complete && "bg-primary text-primary-foreground",
+                // Aujourd'hui (non complété) : contour vert + halo, couleur distincte
+                !d.isFuture && !d.complete && d.isToday &&
+                  "border-2 border-primary bg-primary/10 text-primary shadow-[0_0_14px_rgba(52,211,153,0.35)]",
+                // Aujourd'hui complété : coché + double mise en avant
+                d.complete && d.isToday && "ring-2 ring-primary/40 ring-offset-2 ring-offset-card",
               )}
             >
-              {d.complete ? <Check className="h-4 w-4" strokeWidth={3.5} /> : "·"}
+              {d.complete ? (
+                <Check className="h-4 w-4" strokeWidth={3.5} />
+              ) : d.isToday ? (
+                <span className="h-2 w-2 rounded-full bg-primary" aria-hidden />
+              ) : (
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" aria-hidden />
+              )}
             </span>
             <span
               className={cn(
@@ -520,10 +514,10 @@ function QuickStat({
   value: string
 }) {
   return (
-    <div className="flex items-center justify-center gap-1.5">
+    <div className="flex items-center justify-center gap-1.5 rounded-2xl border border-[#a7f3d0]/8 bg-[#0b1712]/60 px-2 py-2 sm:justify-start sm:px-3">
       <span className={cn("shrink-0", tone)}>{icon}</span>
       <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-[10px]">{label}</p>
         <p className="truncate text-xs font-extrabold tabular-nums">{value}</p>
       </div>
     </div>
@@ -535,16 +529,17 @@ function MacroMini({ macroKey, value, target }: { macroKey: MacroKey; value: num
   const pct = Math.min((value / Math.max(target, 1)) * 100, 100)
   const done = value >= target
   return (
-    <div className="rounded-2xl border border-[#a7f3d0]/10 bg-card p-3 shadow-sm sm:rounded-3xl sm:p-5">
+    <div className="rounded-2xl border border-[#a7f3d0]/10 bg-card p-2.5 shadow-sm sm:p-4">
       <div className="flex items-center justify-between">
-        <p className={cn("text-[11px] font-bold sm:text-sm", meta.text)}>{meta.label}</p>
-        {done && <Check className={cn("h-3.5 w-3.5", meta.text)} strokeWidth={3} />}
+        <p className={cn("text-[10px] font-bold sm:text-xs", meta.text)}>{meta.label}</p>
+        {done && <Check className={cn("h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5", meta.text)} strokeWidth={3} />}
       </div>
-      <p className="mt-1.5 text-base font-extrabold tabular-nums leading-none">
+      <p className="mt-1 text-sm font-extrabold tabular-nums leading-none sm:text-base">
         {value}
-        <span className="text-[11px] font-semibold text-muted-foreground">/{target}g</span>
+        <span className="text-[10px] font-semibold text-muted-foreground">/{target}g</span>
       </p>
-      <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
+      {/* Mini barre de progression individuelle */}
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted sm:mt-2">
         <div className={cn("h-full rounded-full transition-all duration-700", meta.color)} style={{ width: `${pct}%` }} />
       </div>
     </div>

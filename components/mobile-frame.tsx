@@ -17,7 +17,9 @@ export function MobileFrame({ children, className }: { children: React.ReactNode
         className={cn(
           // Phone: locked to viewport height — full-bleed at the top, slight
           // rounding at the bottom only (no dark wedges around the notch area)
-          "relative flex h-dvh w-full flex-col overflow-hidden bg-background safe-top",
+          // h-dvh suit la barre d'URL Safari iOS (iPhone 15→18) ; overscroll-none
+          // supprime le rubber-banding du shell (l'app se comporte comme une app).
+          "relative flex h-dvh w-full flex-col overflow-hidden bg-background safe-top overscroll-none",
           "rounded-b-[1.4rem]",
           // Tablet portrait / landscape: bigger floating rounded card, fluid width
           // (uses more of the screen than before — 52rem wide, 68rem tall max)
