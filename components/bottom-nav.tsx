@@ -35,14 +35,18 @@ const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
 export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab: TabKey) => void }) {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 w-full px-3 sm:absolute sm:inset-x-0 sm:bottom-0 sm:z-30 sm:px-6 sm:pt-3">
-      {/* Rideau dégradé discret (mobile) : estompe le contenu qui passe sous la
-          barre. Court et doux — comme le fond est désormais uniforme en bas,
-          la zone sous la pilule se confond avec l'app : invisible. */}
+      {/* Flou progressif iOS (mobile) : backdrop-blur masqué — flou fort au bord
+          bas, qui s'efface en remontant. Le contenu qui passe sous la barre se
+          fond doucement, sans bande de couleur. Fallback : sans backdrop-filter
+          (vieux moteurs), la pilule opaque à 90 % masque déjà le contenu. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[115%] -z-10 sm:hidden"
+        className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-24 sm:hidden"
         style={{
-          background: "linear-gradient(to top, var(--background) 52%, transparent 100%)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
+          maskImage: "linear-gradient(to top, black 38%, transparent 100%)",
+          WebkitMaskImage: "linear-gradient(to top, black 38%, transparent 100%)",
         }}
       />
       <nav
