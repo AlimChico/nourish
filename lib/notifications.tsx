@@ -183,7 +183,9 @@ export function SmartNotificationsProvider({ children }: { children: React.React
       }
     }
 
-    evaluate()
+    // PAS de notification à l'ouverture : on n'évalue qu'une fois l'app ouverte
+    // depuis au moins 5 min (intervalle). Les rappels vraiment automatiques —
+    // app fermée — viennent du Web Push serveur (cron /api/push/cron), pas d'ici.
     const id = window.setInterval(evaluate, 5 * 60_000)
     return () => window.clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -25,6 +25,7 @@ import { AccountProvider, useAccount } from "@/lib/account"
 import { SyncProvider, useSync } from "@/lib/sync"
 import { HealthProvider } from "@/lib/health"
 import { SmartNotificationsProvider } from "@/lib/notifications"
+import { AutoPushBridge } from "@/lib/auto-push"
 import { WeightProvider } from "@/lib/weight"
 
 type Overlay = "none" | "calculator" | "premium" | "scan" | "barcode" | "settings" | "community" | "coach"
@@ -142,6 +143,17 @@ function App() {
   )
 }
 
+// Le bridge d'abonnement push automatique vit au-dessus de App (splash,
+// onboarding) : dès permission accordée + session, l'appareil s'abonne.
+function AppShell() {
+  return (
+    <>
+      <AutoPushBridge />
+      <App />
+    </>
+  )
+}
+
 export default function Page() {
   return (
     <SyncProvider>
@@ -151,7 +163,7 @@ export default function Page() {
             <HealthProvider>
               <WeightProvider>
                 <SmartNotificationsProvider>
-                  <App />
+                  <AppShell />
                 </SmartNotificationsProvider>
               </WeightProvider>
             </HealthProvider>
