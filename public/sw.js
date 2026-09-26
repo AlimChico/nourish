@@ -4,7 +4,7 @@
  *  - Pages: network-first with cache fallback (fresh when online, usable offline).
  *  - API: never cached (user data must stay fresh).
  */
-const CACHE = "sahtek-v7"
+const CACHE = "sahtek-v8"
 const SHELL = [
   "/",
   "/icon.svg",
