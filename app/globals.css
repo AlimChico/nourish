@@ -178,6 +178,14 @@
     /* Le scroll vit dans les conteneurs internes (main/overlays), jamais le body
        — sinon Safari iOS déplace les éléments fixed pendant le scroll élastique. */
     height: 100%;
+    /* Checklist safe-areas iOS : 100dvh quand supporté (le 100% ci-dessus est
+       le fallback des vieux moteurs). Le layout téléphone n'en dépend PAS —
+       .app-viewport est position:fixed inset:0, hauteur = fenêtre garantie —
+       mais le shell tablette (static) s'y réfère via min-height:100%.
+       NB : PAS de padding safe-area sur :root — il redoublerait .safe-top du
+       shell et pousserait les pages h-dvh (/privacy, /diag) sous le home
+       indicator. Les insets sont appliqués une seule fois, par conteneur. */
+    height: 100dvh;
     /* Fond explicite NON transparent, exactement celui de l'app pour le thème
        courant. Avec viewport-fit=cover, les zones système (barre de statut,
        Dynamic Island, home indicator) prennent CETTE couleur → rendu plein
