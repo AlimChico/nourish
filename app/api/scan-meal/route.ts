@@ -56,7 +56,7 @@ function buildDemoResult(): ScanResponse {
   return {
     dish: "Estimation manuelle (IA indisponible)",
     description:
-      "L'analyse IA n'est pas encore activée (clé ANTHROPIC_API_KEY manquante côté serveur). Voici une estimation type — ajuste les quantités pour correspondre à ton assiette, puis ajoute. Ton photo n'est jamais stockée.",
+      "      L'analyse IA n'est pas encore activée (clé GEMINI_API_KEY / ANTHROPIC_API_KEY manquante côté serveur). Voici une estimation type — ajuste les quantités pour correspondre à ton assiette, puis ajoute. Ta photo n'est jamais stockée.",
     items: [
       {
         name: "Poulet grillé (filet)",
@@ -124,6 +124,86 @@ function normalizeItem(raw: unknown): DetectedFood | null {
   }
 }
 
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash"
+
+/**
+ * Analyse vision via Google Gemini (AI Studio). Même contrat que le chemin
+ * Anthropic : renvoie un ScanResponse, lève en cas d'erreur API.
+ */
+async function scanWithGemini(geminiKey: string, mediaType: string, base64: string): Promise<ScanResponse> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 45_000)
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(geminiKey)}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inline_data: { mime_type: mediaType, data: base64 } },
+              {
+                text: "Identify every food in this meal photo with detailed per-item breakdowns. Reply with the JSON object only.",
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 1600,
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+    },
+  )
+  clearTimeout(timeout)
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "")
+    console.error("gemini vision api error", res.status, detail.slice(0, 300))
+    throw new Error(`AI service error (${res.status})`)
+  }
+
+  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+  const text = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("\n")
+
+  const parsed = extractJson(text) as {
+    dish?: string
+    description?: string
+    items?: unknown[]
+    tips?: string
+  }
+
+  const items = (Array.isArray(parsed.items) ? parsed.items : [])
+    .map(normalizeItem)
+    .filter((x): x is DetectedFood => x !== null)
+
+  if (items.length === 0) {
+    return {
+      ...buildDemoResult(),
+      dish: typeof parsed.dish === "string" ? parsed.dish : "No food detected",
+      description:
+        typeof parsed.description === "string" && parsed.description
+          ? parsed.description
+          : "The photo didn't contain any recognizable food. Try again with the plate fully in frame.",
+      error: "No food detected",
+    }
+  }
+
+  return {
+    dish: typeof parsed.dish === "string" && parsed.dish ? parsed.dish : "Meal analysis",
+    description: typeof parsed.description === "string" ? parsed.description : "",
+    items,
+    tips: typeof parsed.tips === "string" ? parsed.tips : "",
+    source: "ai",
+  }
+}
+
 export async function POST(request: Request) {
   // Abuse guard: vision calls are expensive
   const limit = rateLimit(`scan:${clientIp(request)}`, 10, 60 * 1000)
@@ -161,15 +241,35 @@ export async function POST(request: Request) {
     )
   }
 
+  // Provider IA : Anthropic (Claude) en priorité, sinon Google Gemini.
+  // GEMINI_API_KEY (clé AI Studio, format AQ.Ab8…) → chemin Gemini ; le modèle
+  // se règle via GEMINI_MODEL (défaut gemini-3.8-flash).
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || ""
+  const geminiValid = geminiKey.length >= 20
+
   const apiKey = process.env.ANTHROPIC_API_KEY
   const baseUrl = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com"
   // Placeholder/machine-level env values (e.g. ANTHROPIC_API_KEY=admin or a
   // third-party proxy URL) must not be treated as a real configuration.
   const looksFakeKey = !apiKey || apiKey.length < 20 || apiKey === "admin"
   const usesProxy = /openapis\.online|localhost|127\.0\.0\.1/i.test(baseUrl)
+
+  if (geminiValid && (looksFakeKey || usesProxy)) {
+    try {
+      return Response.json(await scanWithGemini(geminiKey, mediaType, base64), { status: 200 })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error("scan-meal (gemini) failed:", message)
+      return Response.json(
+        { ...buildDemoResult(), error: message.includes("abort") ? "AI request timed out" : "AI request failed" } satisfies ScanResponse,
+        { status: 200 },
+      )
+    }
+  }
+
   if (looksFakeKey || usesProxy) {
     return Response.json(
-      { ...buildDemoResult(), error: "Clé IA non configurée — ajoute ANTHROPIC_API_KEY dans les variables Vercel." } satisfies ScanResponse,
+      { ...buildDemoResult(), error: "Clé IA non configurée — ajoute GEMINI_API_KEY ou ANTHROPIC_API_KEY dans les variables Vercel." } satisfies ScanResponse,
       { status: 200 },
     )
   }
