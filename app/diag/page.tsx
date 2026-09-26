@@ -34,6 +34,41 @@ function supports(css: string): boolean {
 export default function DiagPage() {
   const [info, setInfo] = useState<Info | null>(null)
   const [round, setRound] = useState(0)
+  const [sw, setSw] = useState<{ displayMode: string; caches: string[]; controlled: boolean } | null>(null)
+  const [updating, setUpdating] = useState(false)
+
+  // Mode d'affichage (standalone = installée), caches SW et contrôleurs.
+  useEffect(() => {
+    const dm = (() => {
+      for (const m of ["standalone", "fullscreen", "minimal-ui"]) {
+        if (window.matchMedia(`(display-mode: ${m})`).matches) return m
+      }
+      return "browser"
+    })()
+    const load = async () => {
+      const keys = window.caches ? await caches.keys() : []
+      setSw({ displayMode: dm, caches: keys, controlled: "serviceWorker" in navigator && !!navigator.serviceWorker.controller })
+    }
+    void load()
+  }, [round])
+
+  // Purge totale : désinscrit les SW, supprime TOUS les caches, recharge.
+  const forceUpdate = async () => {
+    setUpdating(true)
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map((r) => r.unregister()))
+      }
+      if (window.caches) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map((k) => caches.delete(k)))
+      }
+    } catch {
+      // on recharge quoi qu'il arrive
+    }
+    window.location.reload()
+  }
 
   useEffect(() => {
     const measure = () => {
@@ -95,6 +130,23 @@ export default function DiagPage() {
         <p className="mt-1 text-xs text-muted-foreground">
           Ouvre cette page sur ton téléphone pour vérifier l&apos;installation en direct.
         </p>
+
+        {sw && (
+          <div className="mt-5 rounded-2xl border border-border bg-card p-4">
+            <Row label="Mode d&apos;affichage" value={sw.displayMode} ok={sw.displayMode !== "browser"} />
+            <Row label="Cache service worker" value={sw.caches.length ? sw.caches.join(", ") : "aucun"} ok={sw.caches.some((c) => c.includes("v9"))} />
+            <Row label="Contrôleur SW actif" value={sw.controlled ? "oui" : "non"} ok={sw.controlled} />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => void forceUpdate()}
+          disabled={updating}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-accent py-3 text-sm font-extrabold text-primary active:scale-[0.98] disabled:opacity-60"
+        >
+          <RefreshCw className={`h-4 w-4 ${updating ? "animate-spin" : ""}`} />
+          {updating ? "Mise à jour…" : "Forcer la mise à jour (purge le cache)"}
+        </button>
 
         {info && (
           <div className="mt-5 rounded-2xl border border-border bg-card p-4">
