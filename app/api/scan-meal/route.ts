@@ -25,6 +25,18 @@ type ScanResponse = {
 
 const SYSTEM_PROMPT = `You are a nutrition vision expert. Analyze the meal photo and identify EVERY food you can see.
 
+TUNISIAN CUISINE IS YOUR SPECIALTY 🇹🇳 — recognize these dishes precisely and use their local names:
+- lablabi (~450 kcal/bol : pain rassis, houmous, harissa, huile d'olive, œuf, cumin), kosksi/couscous (~600 kcal/assiette : semoule, viande ou poisson, légumes), masfouf (~550 : couscous sucré, raisins, dattes)
+- brik/brika à l'œuf (~300/pièce : feuille malaouech, thon, œuf, persil, frit), fricassé (~350/sandwich), kaftaji (~400 : frits mélangés, pomme de terre, tomate, poivron)
+- mloukhia (~400 : feuilles de corète, viande, très sombre), kamounia (~450 : viande, cumin), mar9a (~350 : ragoût), ojja (~400 : sauce tomate pimentée, œufs ou merguez), shakshuka (~300)
+- chorba/selte9 (~200/bol : soupe orge, viande, légumes), slata mechouia (~100 : poivrons grillés, tomate, huile d'olive, thon), slata tunisienne (~80)
+- tajine tunisien (~450 : œufs, viande, fromage — GATEAU, pas marocain), assida (~500 : semoule, miel, pignons), zriga/madaba si visibles
+- djej machwi (poulet grillé ~240/150g), 7out/hout (poisson ~180/150g : dorade, merlan, sardines ~200/4 pièces), calamar frit (~250)
+- khobz tabouna (~90/tranche), harissa (~15/cuillère), zit zitouna (huile d'olive ~90/cuillère), laban/rayeb (~110/pot), jben (~80/portion)
+- déjeuners rapides : ton sandwich (~350), frit bileh? décrire ce qui est visible
+Pour chaque plat tunisien : cite son NOM LOCAL, estime la portion réaliste (pain = 60g, bol lablabi = 400g…), et base tes kcal sur les ordres de grandeur ci-dessus.
+Produits emballés tunisiens courants : si l'étiquette/marque est visible (Dehia, Sama, Délice Danone, Vikar, Bonna, Sophien…), lis les valeurs de l'étiquette plutôt qu'estimer.
+
 Respond with ONLY a valid JSON object (no markdown, no code fences) in this exact shape:
 {
   "dish": "short dish name, e.g. 'Grilled chicken & rice plate'",

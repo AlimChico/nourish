@@ -29,18 +29,31 @@ export async function GET(request: Request) {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 12_000)
+    // Les produits tunisiens sont mieux indexés via le tag pays d'OFF ;
+    // la recherche ciblée aide quand le produit existe mais n'est pas trouvé
+    // par la route directe.
     const res = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_fr,brands,image_small_url,serving_size,nutriments,nutrition_grades`,
+      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_fr,brands,image_small_url,serving_size,nutriments,nutrition_grades,countries_tags`,
       { signal: controller.signal, headers: { "User-Agent": "Sahtek - Tunisia - https://sahtek.app" } },
     )
     clearTimeout(timeout)
 
-    if (res.status === 404) return Response.json({ error: "Product not found" }, { status: 404 })
+    if (res.status === 404) return Response.json({ error: "Product not found", country: "tn" }, { status: 404 })
     if (!res.ok) return Response.json({ error: "Open Food Facts unavailable" }, { status: 502 })
 
     const data = (await res.json()) as { status?: number; product?: Record<string, unknown> }
     if (data.status !== 1 || !data.product) {
-      return Response.json({ error: "Product not found" }, { status: 404 })
+      // Réponse riche : le client propose l'ajout communautaire du produit
+      // manquant (très fréquent pour les marques tunisiennes).
+      return Response.json(
+        {
+          error: "Product not found",
+          hint: "Ce produit tunisien n'est pas encore dans la base mondiale Open Food Facts.",
+          addUrl: `https://world.openfoodfacts.org/cgi/product.pl?code=${encodeURIComponent(code)}`,
+          country: "tn",
+        },
+        { status: 404 },
+      )
     }
 
     const p = data.product

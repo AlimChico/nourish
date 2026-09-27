@@ -49,6 +49,7 @@ export function BarcodeScannerScreen({
   const { addFood } = useFoodLog()
   const [phase, setPhase] = useState<Phase>("scanning")
   const [error, setError] = useState<string | null>(null)
+  const [notFoundUrl, setNotFoundUrl] = useState<string | null>(null)
   const [product, setProduct] = useState<OFFProduct | null>(null)
   const [servings, setServings] = useState(1)
   const [meal, setMeal] = useState<MealKey>(targetForTime)
@@ -79,9 +80,11 @@ export function BarcodeScannerScreen({
         setLogged(false)
         setPhase("found")
       } else {
+        setNotFoundUrl(res.status === 404 ? (data as { addUrl?: string } | null)?.addUrl ?? null : null)
         setError(
           res.status === 404
-            ? "Produit introuvable dans Open Food Facts — essaie un autre produit ou entre le code manuellement."
+            ? (data as { hint?: string } | null)?.hint ??
+              "Produit introuvable dans la base mondiale — les produits tunisiens y sont rares. Photo du plat = estimation IA, ou saisis le code manuellement."
             : data?.error ?? "Recherche impossible pour le moment.",
         )
         setPhase("error")
@@ -370,6 +373,16 @@ export function BarcodeScannerScreen({
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 {error}
               </p>
+              {notFoundUrl && (
+                <a
+                  href={notFoundUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 block w-full rounded-xl bg-primary/20 py-2 text-center text-xs font-bold text-primary active:scale-95"
+                >
+                  + Ajouter ce produit à la base (aide les autres Tunisiens)
+                </a>
+              )}
               <button
                 type="button"
                 onClick={backToScan}
