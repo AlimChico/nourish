@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Manrope } from 'next/font/google'
+import { VisitTracker } from '@/components/visit-tracker'
 import './globals.css'
 
 const manrope = Manrope({
@@ -77,6 +78,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased">
+        <VisitTracker />
         {children}
         {/* Service worker: production only — in dev it would serve stale bundles,
             and we actively unregister/clean any left-over registration. */}

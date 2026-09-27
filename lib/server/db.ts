@@ -158,6 +158,13 @@ async function makePostgres(url: string) {
     last_sent_date TEXT NOT NULL DEFAULT ''
   )`
   await sql`CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)`
+  await sql`CREATE TABLE IF NOT EXISTS visits (
+    day TEXT NOT NULL,
+    visitor TEXT NOT NULL,
+    user_id TEXT,
+    created_at BIGINT NOT NULL,
+    PRIMARY KEY (day, visitor)
+  )`
   return sql
 }
 
@@ -258,6 +265,10 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   last_sent_date TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+CREATE TABLE IF NOT EXISTS visits (
+  day TEXT NOT NULL, visitor TEXT NOT NULL, user_id TEXT,
+  created_at INTEGER NOT NULL, PRIMARY KEY (day, visitor)
+);
 `)
 }
 
@@ -423,6 +434,64 @@ export const db = {
       return
     }
     sqlite!.prepare("UPDATE push_subscriptions SET last_sent_date = ? WHERE endpoint = ?").run(date, endpoint)
+  },
+
+  // ----- visit tracking (ouvertures + visiteurs uniques, une ligne/visiteur/jour) -----
+
+  async trackVisit(visitor: string, userId: string | null, day: string): Promise<void> {
+    const now = Date.now()
+    if (usingPostgres) {
+      await sql`INSERT INTO visits (day, visitor, user_id, created_at) VALUES (${day}, ${visitor}, ${userId}, ${now})
+        ON CONFLICT (day, visitor) DO UPDATE SET user_id = COALESCE(visits.user_id, EXCLUDED.user_id)`
+      return
+    }
+    sqlite!
+      .prepare(
+        `INSERT INTO visits (day, visitor, user_id, created_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(day, visitor) DO UPDATE SET user_id = COALESCE(user_id, excluded.user_id)`,
+      )
+      .run(day, visitor, userId, now)
+  },
+
+  async visitsStats(): Promise<{
+    total: number
+    today: number
+    days7: { visits: number; visitors: number; users: number }
+    daily: { day: string; visits: number; visitors: number; users: number }[]
+  }> {
+    const today = new Date().toISOString().slice(0, 10)
+    const since7 = new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10)
+    const map7 = (visits: number, visitors: number, users: number) => ({ visits, visitors, users })
+    if (usingPostgres) {
+      const tot = (await sql`SELECT COUNT(*)::int AS n FROM visits`) as unknown as { n: number }[]
+      const tod = (await sql`SELECT COUNT(*)::int AS n FROM visits WHERE day = ${today}`) as unknown as { n: number }[]
+      const w = (await sql`SELECT COUNT(*)::int AS visits, COUNT(DISTINCT visitor)::int AS visitors, COUNT(DISTINCT user_id)::int AS users
+        FROM visits WHERE day >= ${since7}`) as unknown as { visits: number; visitors: number; users: number }[]
+      const rows = (await sql`SELECT day, COUNT(*)::int AS visits, COUNT(DISTINCT visitor)::int AS visitors, COUNT(DISTINCT user_id)::int AS users
+        FROM visits WHERE day >= ${since7} GROUP BY day ORDER BY day DESC LIMIT 14`) as unknown as { day: string; visits: number; visitors: number; users: number }[]
+      return {
+        total: tot[0]?.n ?? 0,
+        today: tod[0]?.n ?? 0,
+        days7: map7(Number(w[0]?.visits ?? 0), Number(w[0]?.visitors ?? 0), Number(w[0]?.users ?? 0)),
+        daily: rows.map((r) => ({ day: r.day, visits: Number(r.visits), visitors: Number(r.visitors), users: Number(r.users) })),
+      }
+    }
+    const tot = sqlite!.prepare("SELECT COUNT(*) AS n FROM visits").get() as { n: number }
+    const tod = sqlite!.prepare("SELECT COUNT(*) AS n FROM visits WHERE day = ?").get(today) as { n: number }
+    const w = sqlite!
+      .prepare("SELECT COUNT(*) AS visits, COUNT(DISTINCT visitor) AS visitors, COUNT(DISTINCT user_id) AS users FROM visits WHERE day >= ?")
+      .get(since7) as { visits: number; visitors: number; users: number }
+    const rows = sqlite!
+      .prepare(
+        "SELECT day, COUNT(*) AS visits, COUNT(DISTINCT visitor) AS visitors, COUNT(DISTINCT user_id) AS users FROM visits WHERE day >= ? GROUP BY day ORDER BY day DESC LIMIT 14",
+      )
+      .all(since7) as { day: string; visits: number; visitors: number; users: number }[]
+    return {
+      total: Number(tot.n),
+      today: Number(tod.n),
+      days7: map7(Number(w.visits), Number(w.visitors), Number(w.users)),
+      daily: rows.map((r) => ({ day: r.day, visits: Number(r.visits), visitors: Number(r.visitors), users: Number(r.users) })),
+    }
   },
 
   // ----- key/value-ish stores (account, health as JSON blobs; day_logs per date)
