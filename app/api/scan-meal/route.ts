@@ -127,19 +127,33 @@ function normalizeItem(raw: unknown): DetectedFood | null {
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash"
 
 /**
+ * Modèle de secours si le principal est surchargé (503 high demand) :
+ * gemini-flash-lite répond presque toujours, qualité suffisante pour l'analyse.
+ */
+const GEMINI_FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-2.5-flash-lite"]
+
+async function geminiGenerate(geminiKey: string, model: string, body: unknown): Promise<Response> {
+  return fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiKey)}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      signal: (() => {
+        const c = new AbortController()
+        setTimeout(() => c.abort(), 45_000)
+        return c.signal
+      })(),
+      body: JSON.stringify(body),
+    },
+  )
+}
+
+/**
  * Analyse vision via Google Gemini (AI Studio). Même contrat que le chemin
  * Anthropic : renvoie un ScanResponse, lève en cas d'erreur API.
  */
 async function scanWithGemini(geminiKey: string, mediaType: string, base64: string): Promise<ScanResponse> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 45_000)
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(geminiKey)}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
+  const buildBody = (model: string) => JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [
           {
@@ -158,10 +172,18 @@ async function scanWithGemini(geminiKey: string, mediaType: string, base64: stri
           responseMimeType: "application/json",
           thinkingConfig: { thinkingBudget: 0 },
         },
-      }),
-    },
-  )
-  clearTimeout(timeout)
+  })
+
+  // Essaie le modèle principal, puis les fallbacks en cas de 503 (surcharge)
+  // ou 429 (quota) — la dispo des modèles Gemini varie heure par heure.
+  let res = await geminiGenerate(geminiKey, GEMINI_MODEL, buildBody(GEMINI_MODEL))
+  if ((res.status === 503 || res.status === 429) && !process.env.GEMINI_MODEL) {
+    for (const fallback of GEMINI_FALLBACK_MODELS) {
+      console.warn("gemini model busy (" + res.status + "), trying fallback:", fallback)
+      res = await geminiGenerate(geminiKey, fallback, buildBody(fallback))
+      if (res.ok || (res.status !== 503 && res.status !== 429)) break
+    }
+  }
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "")
