@@ -166,7 +166,8 @@ async function scanWithGemini(geminiKey: string, mediaType: string, base64: stri
   if (!res.ok) {
     const detail = await res.text().catch(() => "")
     console.error("gemini vision api error", res.status, detail.slice(0, 300))
-    throw new Error(`AI service error (${res.status})`)
+    const reason = /"message"\s*:\s*"([^"]+)"/.exec(detail)?.[1]
+    throw new Error(`AI service error (${res.status}${reason ? ": " + reason.slice(0, 120) : ""})`)
   }
 
   const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
@@ -261,7 +262,7 @@ export async function POST(request: Request) {
       const message = err instanceof Error ? err.message : String(err)
       console.error("scan-meal (gemini) failed:", message)
       return Response.json(
-        { ...buildDemoResult(), error: message.includes("abort") ? "AI request timed out" : "AI request failed" } satisfies ScanResponse,
+        { ...buildDemoResult(), error: message.includes("abort") ? "AI request timed out" : message.slice(0, 160) } satisfies ScanResponse,
         { status: 200 },
       )
     }
