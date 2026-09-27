@@ -153,7 +153,7 @@ async function geminiGenerate(geminiKey: string, model: string, body: unknown): 
  * Anthropic : renvoie un ScanResponse, lève en cas d'erreur API.
  */
 async function scanWithGemini(geminiKey: string, mediaType: string, base64: string): Promise<ScanResponse> {
-  const buildBody = (model: string) => JSON.stringify({
+  const buildBody = () => ({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [
           {
@@ -176,11 +176,11 @@ async function scanWithGemini(geminiKey: string, mediaType: string, base64: stri
 
   // Essaie le modèle principal, puis les fallbacks en cas de 503 (surcharge)
   // ou 429 (quota) — la dispo des modèles Gemini varie heure par heure.
-  let res = await geminiGenerate(geminiKey, GEMINI_MODEL, buildBody(GEMINI_MODEL))
+  let res = await geminiGenerate(geminiKey, GEMINI_MODEL, buildBody())
   if ((res.status === 503 || res.status === 429) && !process.env.GEMINI_MODEL) {
     for (const fallback of GEMINI_FALLBACK_MODELS) {
       console.warn("gemini model busy (" + res.status + "), trying fallback:", fallback)
-      res = await geminiGenerate(geminiKey, fallback, buildBody(fallback))
+      res = await geminiGenerate(geminiKey, fallback, buildBody())
       if (res.ok || (res.status !== 503 && res.status !== 429)) break
     }
   }
