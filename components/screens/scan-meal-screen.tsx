@@ -68,13 +68,37 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  /** Compresse une image data-URL : max 1024px, JPEG ~80% (≈200 Ko). */
+  const downscale = useCallback(async (dataUrl: string): Promise<string> => {
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image()
+        i.onload = () => resolve(i)
+        i.onerror = reject
+        i.src = dataUrl
+      })
+      const side = Math.min(img.naturalWidth, img.naturalHeight, 1024)
+      const canvas = document.createElement("canvas")
+      canvas.width = side
+      canvas.height = side
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return dataUrl
+      const sx = (img.naturalWidth - side) / 2
+      const sy = (img.naturalHeight - side) / 2
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, side, side)
+      return canvas.toDataURL("image/jpeg", 0.8)
+    } catch {
+      return dataUrl // compression impossible → on tente l'original
+    }
+  }, [])
+
   const capture = useCallback(() => {
     const video = videoRef.current
     let thumb: string | undefined
     try {
       if (video && video.videoWidth > 0) {
         const canvas = document.createElement("canvas")
-        const side = Math.min(video.videoWidth, video.videoHeight, 640)
+        const side = Math.min(video.videoWidth, video.videoHeight, 1024)
         canvas.width = side
         canvas.height = side
         const ctx = canvas.getContext("2d")
@@ -82,7 +106,7 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
           const sx = (video.videoWidth - side) / 2
           const sy = (video.videoHeight - side) / 2
           ctx.drawImage(video, sx, sy, side, side, 0, 0, side, side)
-          thumb = canvas.toDataURL("image/jpeg", 0.85)
+          thumb = canvas.toDataURL("image/jpeg", 0.8)
         }
       }
     } catch {
@@ -96,7 +120,14 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
 
   const onPickFile = useCallback((file: File) => {
     const reader = new FileReader()
-    reader.onload = () => void runAnalysis(typeof reader.result === "string" ? reader.result : undefined)
+    reader.onload = async () => {
+      const raw = typeof reader.result === "string" ? reader.result : undefined
+      if (!raw) return void runAnalysis(undefined)
+      // Les photos de galerie font 3–6 Mo : Vercel rejette les bodies > ~4,5 Mo
+      // et la 4G rame. On compresse localement (~200 Ko) avant l'envoi.
+      const small = await downscale(raw)
+      void runAnalysis(small)
+    }
     reader.onerror = () => void runAnalysis(undefined)
     reader.readAsDataURL(file)
     // eslint-disable-next-line react-hooks/exhaustive-deps
