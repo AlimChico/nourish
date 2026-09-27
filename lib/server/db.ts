@@ -494,6 +494,51 @@ export const db = {
     }
   },
 
+  // ----- admin stats (panel propriétaire) -----
+
+  async adminOverview(): Promise<{
+    users: { total: number; last7: number; latest: { name: string; email: string; createdAt: number }[] }
+    scans: { total: number; last7: number }
+    pushSubscriptions: number
+    activeSessions: number
+    recipes: number
+    daysLogged: number
+  }> {
+    const since7 = Date.now() - 7 * 86_400_000
+    if (usingPostgres) {
+      const uT = (await sql`SELECT COUNT(*)::int AS n FROM users`) as unknown as { n: number }[]
+      const u7 = (await sql`SELECT COUNT(*)::int AS n FROM users WHERE created_at >= ${since7}`) as unknown as { n: number }[]
+      const uL = (await sql`SELECT name, email, created_at FROM users ORDER BY created_at DESC LIMIT 10`) as unknown as { name: string; email: string; created_at: number }[]
+      const sT = (await sql`SELECT COUNT(*)::int AS n FROM scans`) as unknown as { n: number }[]
+      const s7 = (await sql`SELECT COUNT(*)::int AS n FROM scans WHERE created_at >= ${since7}`) as unknown as { n: number }[]
+      const p = (await sql`SELECT COUNT(*)::int AS n FROM push_subscriptions`) as unknown as { n: number }[]
+      const s = (await sql`SELECT COUNT(*)::int AS n FROM sessions WHERE expires_at > ${Date.now()}`) as unknown as { n: number }[]
+      const r = (await sql`SELECT COUNT(*)::int AS n FROM community_recipes`) as unknown as { n: number }[]
+      const d = (await sql`SELECT COUNT(*)::int AS n FROM day_logs`) as unknown as { n: number }[]
+      return {
+        users: { total: uT[0]?.n ?? 0, last7: u7[0]?.n ?? 0, latest: uL.map((x) => ({ name: x.name, email: x.email, createdAt: Number(x.created_at) })) },
+        scans: { total: sT[0]?.n ?? 0, last7: s7[0]?.n ?? 0 },
+        pushSubscriptions: p[0]?.n ?? 0,
+        activeSessions: s[0]?.n ?? 0,
+        recipes: r[0]?.n ?? 0,
+        daysLogged: d[0]?.n ?? 0,
+      }
+    }
+    const q = (t: string, since?: number) =>
+      since === undefined
+        ? (sqlite!.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number })
+        : (sqlite!.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE created_at >= ?`).get(since) as { n: number })
+    const uL = sqlite!.prepare("SELECT name, email, created_at FROM users ORDER BY created_at DESC LIMIT 10").all() as { name: string; email: string; created_at: number }[]
+    return {
+      users: { total: Number(q("users").n), last7: Number(q("users", since7).n), latest: uL.map((x) => ({ name: x.name, email: x.email, createdAt: Number(x.created_at) })) },
+      scans: { total: Number(q("scans").n), last7: Number(q("scans", since7).n) },
+      pushSubscriptions: Number(q("push_subscriptions").n),
+      activeSessions: Number((sqlite!.prepare("SELECT COUNT(*) AS n FROM sessions WHERE expires_at > ?").get(Date.now()) as { n: number }).n),
+      recipes: Number(q("community_recipes").n),
+      daysLogged: Number(q("day_logs").n),
+    }
+  },
+
   // ----- key/value-ish stores (account, health as JSON blobs; day_logs per date)
 
   async getJson(table: "account" | "health" | "weight", userId: string): Promise<unknown | null> {

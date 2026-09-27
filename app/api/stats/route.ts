@@ -40,7 +40,8 @@ export async function GET(request: Request) {
   try {
     const { db } = await import("@/lib/server/db")
     const stats = await db.visitsStats()
-    return Response.json({ backend: usingPostgres ? "postgres" : "sqlite", ...stats })
+    const overview = await db.adminOverview()
+    return Response.json({ backend: usingPostgres ? "postgres" : "sqlite", ...stats, overview })
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : "stats failed" }, { status: 500 })
   }

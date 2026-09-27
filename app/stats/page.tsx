@@ -4,12 +4,22 @@ import { useCallback, useEffect, useState } from "react"
 
 const KEY_STORE = "sahtek.adminkey.v1"
 
+type Overview = {
+  users: { total: number; last7: number; latest: { name: string; email: string; createdAt: number }[] }
+  scans: { total: number; last7: number }
+  pushSubscriptions: number
+  activeSessions: number
+  recipes: number
+  daysLogged: number
+}
+
 type Stats = {
   backend: string
   total: number
   today: number
   days7: { visits: number; visitors: number; users: number }
   daily: { day: string; visits: number; visitors: number; users: number }[]
+  overview: Overview
 }
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -138,6 +148,63 @@ export default function StatsPage() {
             <p className="mt-3 text-[11px] text-muted-foreground">
               Backend : {stats.backend} · Utilisateurs connectés (7 j) : {stats.days7.users}
             </p>
+
+            <div className="mt-4 rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">L&apos;app en chiffres</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-xl bg-accent/40 p-3">
+                  <p className="text-[11px] font-bold text-muted-foreground">Comptes créés</p>
+                  <p className="text-xl font-black tabular-nums text-primary">
+                    {stats.overview.users.total}
+                    <span className="ml-1 text-[11px] font-bold text-muted-foreground">+{stats.overview.users.last7} / 7 j</span>
+                  </p>
+                </div>
+                <div className="rounded-xl bg-accent/40 p-3">
+                  <p className="text-[11px] font-bold text-muted-foreground">Scans de repas</p>
+                  <p className="text-xl font-black tabular-nums text-primary">
+                    {stats.overview.scans.total}
+                    <span className="ml-1 text-[11px] font-bold text-muted-foreground">+{stats.overview.scans.last7} / 7 j</span>
+                  </p>
+                </div>
+                <div className="rounded-xl bg-accent/40 p-3">
+                  <p className="text-[11px] font-bold text-muted-foreground">Jours loggés</p>
+                  <p className="text-xl font-black tabular-nums text-primary">{stats.overview.daysLogged}</p>
+                </div>
+                <div className="rounded-xl bg-accent/40 p-3">
+                  <p className="text-[11px] font-bold text-muted-foreground">Recettes communauté</p>
+                  <p className="text-xl font-black tabular-nums text-primary">{stats.overview.recipes}</p>
+                </div>
+                <div className="rounded-xl bg-accent/40 p-3">
+                  <p className="text-[11px] font-bold text-muted-foreground">Push actifs</p>
+                  <p className="text-xl font-black tabular-nums text-primary">{stats.overview.pushSubscriptions}</p>
+                </div>
+                <div className="rounded-xl bg-accent/40 p-3">
+                  <p className="text-[11px] font-bold text-muted-foreground">Sessions ouvertes</p>
+                  <p className="text-xl font-black tabular-nums text-primary">{stats.overview.activeSessions}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Derniers inscrits</p>
+              <div className="mt-2 divide-y divide-border/60">
+                {stats.overview.users.latest.length === 0 && (
+                  <p className="py-2 text-xs text-muted-foreground">Aucun compte pour le moment.</p>
+                )}
+                {stats.overview.users.latest.map((u) => (
+                  <div key={u.email} className="flex items-center justify-between py-2">
+                    <div>
+                      <p className="text-sm font-bold">{u.name}</p>
+                      <p className="text-[11px] text-muted-foreground">{u.email}</p>
+                    </div>
+                    <span className="text-[11px] font-bold tabular-nums text-muted-foreground">
+                      {new Date(u.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <button
               type="button"
               onClick={() => {
