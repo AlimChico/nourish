@@ -19,6 +19,34 @@ export const metadata: Metadata = {
   title: 'Sahtek — Your Health. Our Priority.',
   description:
     'Track your nutrition, reach your goals, and become a healthier version of yourself.',
+  keywords: [
+    'nutrition Tunisie',
+    'compteur calories',
+    'coach nutrition',
+    'maigrir Tunisie',
+    'prise de muscle',
+    'couscous',
+    'lablabi',
+    'scan repas',
+    'food tracker',
+    'Sahtek',
+  ],
+  alternates: { canonical: '/' },
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: 'website',
+    siteName: 'Sahtek',
+    title: 'Sahtek — ton coach nutrition tunisien 🇹🇳',
+    description:
+      'Scanne tes plats, compte tes calories et atteins tes objectifs avec un coach qui parle derja, français et anglais.',
+    locale: 'fr_TN',
+    url: '/',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Sahtek — ton coach nutrition tunisien 🇹🇳',
+    description: 'Scanne tes plats, compte tes calories, atteins tes objectifs.',
+  },
   generator: 'v0.app',
   icons: {
     icon: [
@@ -59,6 +87,24 @@ export const viewport: Viewport = {
   interactiveWidget: 'resizes-content',
 }
 
+// URL canonique pour le JSON-LD (moteurs de recherche).
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://nourish-roan.vercel.app')
+
+// Rich result Google : application web de santé, gratuite.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Sahtek',
+  applicationCategory: 'HealthApplication',
+  operatingSystem: 'Web',
+  url: APP_URL,
+  description:
+    'Coach nutrition tunisien : scan de plats, calories, macros, rappels — en derja, français et anglais.',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+}
+
 const themeInit = `try{var t=localStorage.getItem('nourish.theme.v1');var d=t!=='light';var r=document.documentElement;r.classList.toggle('dark',d);r.classList.toggle('light',!d);var m=document.querySelector('meta[name=theme-color]');if(m){m.setAttribute('content',d?'#0b0f0d':'#f2faf6')}}catch(e){}`
 
 export default function RootLayout({
@@ -78,6 +124,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <VisitTracker />
         {children}
         {/* Service worker: production only — in dev it would serve stale bundles,
