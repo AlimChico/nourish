@@ -114,7 +114,8 @@ async function makePostgres(url: string) {
     months INT NOT NULL,
     max_uses INT NOT NULL DEFAULT 1,
     uses INT NOT NULL DEFAULT 0,
-    created_at BIGINT NOT NULL
+    created_at BIGINT NOT NULL,
+    days INT
   )`
   await sql`CREATE TABLE IF NOT EXISTS community_recipes (
     id TEXT PRIMARY KEY,
@@ -237,7 +238,7 @@ CREATE INDEX IF NOT EXISTS idx_scans_user_date ON scans(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_events_user_date ON events(user_id, date);
 CREATE TABLE IF NOT EXISTS premium_codes (
   code TEXT PRIMARY KEY, months INTEGER NOT NULL, max_uses INTEGER NOT NULL DEFAULT 1,
-  uses INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+  uses INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, days INTEGER
 );
 CREATE TABLE IF NOT EXISTS community_recipes (
   id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -807,38 +808,50 @@ export const db = {
 
   // ----- premium activation codes -----
 
-  async findPremiumCode(code: string): Promise<{ code: string; months: number; maxUses: number; uses: number } | null> {
-    const map = (r: { code: string; months: number; max_uses: number; uses: number }) => ({ code: r.code, months: r.months, maxUses: r.max_uses, uses: r.uses })
+  async findPremiumCode(code: string): Promise<{ code: string; months: number; days: number | null; maxUses: number; uses: number } | null> {
+    const map = (r: { code: string; months: number; days?: number | null; max_uses: number; uses: number }) => ({
+      code: r.code,
+      months: r.months,
+      days: r.days ?? null,
+      maxUses: r.max_uses,
+      uses: r.uses,
+    })
     if (usingPostgres) {
-      const rows = (await sql`SELECT code, months, max_uses, uses FROM premium_codes WHERE code = ${code} LIMIT 1`) as unknown as { code: string; months: number; max_uses: number; uses: number }[]
+      const rows = (await sql`SELECT code, months, days, max_uses, uses FROM premium_codes WHERE code = ${code} LIMIT 1`) as unknown as { code: string; months: number; days: number | null; max_uses: number; uses: number }[]
       return rows[0] ? map(rows[0]) : null
     }
-    const row = sqlite!.prepare("SELECT code, months, max_uses, uses FROM premium_codes WHERE code = ?").get(code) as { code: string; months: number; max_uses: number; uses: number } | undefined
+    const row = sqlite!.prepare("SELECT code, months, days, max_uses, uses FROM premium_codes WHERE code = ?").get(code) as { code: string; months: number; days: number | null; max_uses: number; uses: number } | undefined
     return row ? map(row) : null
   },
 
-  async redeemPremiumCode(code: string, userId: string): Promise<{ ok: boolean; months?: number; reason?: string }> {
+  async redeemPremiumCode(code: string, userId: string): Promise<{ ok: boolean; months?: number; days?: number; reason?: string }> {
     const normalized = code.trim().toUpperCase()
     const row = await this.findPremiumCode(normalized)
     if (!row) return { ok: false, reason: "Code inconnu" }
     if (row.uses >= row.maxUses) return { ok: false, reason: "Code déjà utilisé" }
     if (usingPostgres) {
-      const res = (await sql`UPDATE premium_codes SET uses = uses + 1 WHERE code = ${normalized} AND uses < max_uses RETURNING months`) as unknown as { months: number }[]
+      const res = (await sql`UPDATE premium_codes SET uses = uses + 1 WHERE code = ${normalized} AND uses < max_uses RETURNING months, days`) as unknown as { months: number; days: number | null }[]
       if (res.length === 0) return { ok: false, reason: "Code déjà utilisé" }
-      return { ok: true, months: Number(res[0].months) }
+      return { ok: true, months: Number(res[0].months), days: res[0].days != null ? Number(res[0].days) : undefined }
     }
-    const res = sqlite!.prepare("UPDATE premium_codes SET uses = uses + 1 WHERE code = ? AND uses < max_uses RETURNING months").get(normalized) as { months: number } | undefined
+    const res = sqlite!.prepare("UPDATE premium_codes SET uses = uses + 1 WHERE code = ? AND uses < max_uses RETURNING months, days").get(normalized) as { months: number; days: number | null } | undefined
     if (!res) return { ok: false, reason: "Code déjà utilisé" }
-    return { ok: true, months: Number(res.months) }
+    return { ok: true, months: Number(res.months), days: res.days != null ? Number(res.days) : undefined }
   },
 
-  async createPremiumCode(code: string, months: number, maxUses: number): Promise<void> {
+  async createPremiumCode(code: string, months: number, maxUses: number, days?: number): Promise<void> {
     if (usingPostgres) {
-      await sql`INSERT INTO premium_codes (code, months, max_uses, uses, created_at) VALUES (${code}, ${months}, ${maxUses}, 0, ${Date.now()})
-        ON CONFLICT (code) DO NOTHING`
+      await sql`INSERT INTO premium_codes (code, months, max_uses, uses, created_at, days)
+        VALUES (${code}, ${months}, ${maxUses}, 0, ${Date.now()}, ${days ?? null})
+        ON CONFLICT (code) DO UPDATE SET months = EXCLUDED.months, max_uses = EXCLUDED.max_uses, days = EXCLUDED.days`
       return
     }
-    sqlite!.prepare("INSERT OR IGNORE INTO premium_codes (code, months, max_uses, uses, created_at) VALUES (?, ?, ?, 0, ?)").run(code, months, maxUses, Date.now())
+    sqlite!
+      .prepare(
+        "INSERT INTO premium_codes (code, months, max_uses, uses, created_at, days) VALUES (?, ?, ?, 0, ?, ?) " +
+          "ON CONFLICT(code) DO UPDATE SET months = excluded.months, max_uses = excluded.max_uses, days = excluded.days",
+      )
+      .run(code, months, maxUses, Date.now(), days ?? null)
   },
 }
 

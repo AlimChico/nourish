@@ -47,6 +47,10 @@ const METHODS: { id: PayMethod; label: string; desc: string; icon: typeof Smartp
   { id: "card", label: "Carte bancaire", desc: "Visa / Mastercard internationales", icon: CreditCard },
 ]
 
+/** Contact activation humaine (WhatsApp) — le vrai chemin de paiement aujourd'hui. */
+const CONTACT_PHONE = "95211808"
+const CONTACT_WA = `https://wa.me/216${CONTACT_PHONE}?text=${encodeURIComponent("Salam, je veux passer Premium sur Sahtek 🥗")}`
+
 export function PremiumScreen({ onClose }: { onClose: () => void }) {
   const { premium, isPremium, subscribe, cancel, resume } = usePremium()
   const [step, setStep] = useState<Step>(premium.plan ? "manage" : "plans")
@@ -216,15 +220,24 @@ export function PremiumScreen({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="border-t border-[#a7f3d0]/10 bg-secondary px-6 pb-8 pt-4">
-            <button
-              type="button"
-              onClick={() => setStep("checkout")}
+            <a
+              href={CONTACT_WA}
+              target="_blank"
+              rel="noreferrer"
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-extrabold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.98]"
             >
               <Crown className="h-5 w-5" />
               Passer Premium — {price.priceTND}{price.per}
-            </button>
-            <p className="mt-3 text-center text-xs text-[#e6fff1]/40">Sans engagement · Annule quand tu veux</p>
+            </a>
+            <a
+              href={CONTACT_WA}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 block text-center text-xs font-bold text-primary underline"
+            >
+              Ou contacte-nous au {CONTACT_PHONE} (WhatsApp) pour activer
+            </a>
+            <p className="mt-2 text-center text-xs text-[#e6fff1]/40">Sans engagement · Annule quand tu veux</p>
           </div>
         </>
       )}
@@ -269,6 +282,24 @@ export function PremiumScreen({ onClose }: { onClose: () => void }) {
                 )
               })}
             </div>
+
+            {/* Contact direct — le chemin d'activation réel (paiement manuel). */}
+            <a
+              href={CONTACT_WA}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 flex items-center gap-3 rounded-2xl border-2 border-primary/40 bg-primary/10 p-3.5 transition-transform active:scale-[0.98]"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/20 text-primary">
+                <Smartphone className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-bold">Contacte-nous sur WhatsApp</span>
+                <span className="block text-xs text-[#e6fff1]/60">
+                  <b className="text-primary">{CONTACT_PHONE}</b> — paie avec Flouci/D17 et active Premium en 2 min
+                </span>
+              </span>
+            </a>
 
             {method === "card" ? (
               <div className="mt-5 space-y-4">
