@@ -66,6 +66,14 @@ export async function analyzeMealReal(thumbnail?: string): Promise<ScanResult> {
     error?: string
   }
 
+  // « Pas de nourriture détectée » : l'API renvoie zéro item — on le signale
+  // pour que l'écran affiche l'état dédié au lieu d'une liste vide.
+  if (data.error === "No food detected" || (data.items.length === 0 && data.source === "ai")) {
+    const e = new Error("NO_FOOD") as Error & { noFood?: boolean }
+    e.noFood = true
+    throw e
+  }
+
   return {
     id,
     dish: data.dish,

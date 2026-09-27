@@ -20,7 +20,7 @@ import { analyzeMealReal, targetForTime, type ScanResult, type ScannedItem } fro
 import { mealMeta } from "@/lib/food-log"
 import { cn } from "@/lib/utils"
 
-type Phase = "capture" | "analyzing" | "review"
+type Phase = "capture" | "analyzing" | "review" | "nofood"
 
 export function ScanMealScreen({ onClose }: { onClose: () => void }) {
   const { addFood } = useFoodLog()
@@ -144,7 +144,13 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
       setKept(Object.fromEntries(r.items.map((_, i) => [i, true])))
       setQtys(Object.fromEntries(r.items.map((_, i) => [i, r.items[i].quantity])))
       setPhase("review")
-    } catch {
+    } catch (err) {
+      if (err && typeof err === "object" && (err as { noFood?: boolean }).noFood) {
+        // Photo sans aliment reconnu : état dédié (pas de liste vide).
+        setError(null)
+        setPhase("nofood")
+        return
+      }
       setError("Analyse impossible — vérifie ta connexion puis réessaie (ou importe une photo).")
       setPhase("capture")
       void startCamera()
@@ -202,6 +208,7 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
               {phase === "capture" && "Point at your plate and capture"}
               {phase === "analyzing" && "AI is analyzing your meal…"}
               {phase === "review" && "Review what we detected"}
+              {phase === "nofood" && "No food detected"}
             </p>
           </div>
         </div>
@@ -219,7 +226,33 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* Body */}
-      {phase !== "review" ? (
+      {phase === "nofood" ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-secondary px-8 text-center text-[#e6fff1]">
+          <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#a7f3d0]/10">
+            <Camera className="h-8 w-8 text-[#e6fff1]/70" />
+          </span>
+          <p className="text-lg font-extrabold">No food detected</p>
+          <p className="max-w-xs text-sm text-[#e6fff1]/70">
+            We couldn&apos;t find any food in this photo. Frame the whole plate, add some light, and try again.
+          </p>
+          <div className="mt-2 flex w-full max-w-xs flex-col gap-2">
+            <button
+              type="button"
+              onClick={retake}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-extrabold text-primary-foreground active:scale-[0.98]"
+            >
+              <Camera className="h-4 w-4" /> Try again
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-[#a7f3d0]/20 py-3 text-sm font-bold text-[#e6fff1]/80 active:scale-[0.98]"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ) : phase !== "review" ? (
         <div className="relative flex flex-1 flex-col overflow-hidden bg-secondary">
           {/* Viewfinder */}
           <div className="relative flex-1 overflow-hidden">

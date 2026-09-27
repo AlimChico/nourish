@@ -207,13 +207,17 @@ async function scanWithGemini(geminiKey: string, mediaType: string, base64: stri
     .filter((x): x is DetectedFood => x !== null)
 
   if (items.length === 0) {
+    // Pas de nourriture reconnue : on répond SANS faux aliments (le résultat
+    // démo en contient) — juste le message clair pour l'utilisateur.
     return {
-      ...buildDemoResult(),
-      dish: typeof parsed.dish === "string" ? parsed.dish : "No food detected",
+      dish: typeof parsed.dish === "string" && parsed.dish ? parsed.dish : "No food detected",
       description:
         typeof parsed.description === "string" && parsed.description
           ? parsed.description
-          : "The photo didn't contain any recognizable food. Try again with the plate fully in frame.",
+          : "Aucun aliment reconnu sur cette photo. Recadre l'assiette entière, avec de la lumière, et réessaie.",
+      items: [],
+      tips: "",
+      source: "ai",
       error: "No food detected",
     }
   }
