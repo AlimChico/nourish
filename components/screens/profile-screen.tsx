@@ -28,6 +28,7 @@ import { useStreak } from "@/components/use-streak"
 import { nativeShare } from "@/lib/share"
 import { Share2 } from "lucide-react"
 import { barWidth, cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 
 const goalLabels = { lose: "Lose weight", maintain: "Maintain", gain: "Gain muscle" } as const
 
@@ -59,6 +60,7 @@ export function ProfileScreen({
   const xp = useXp()
   const weight = useWeight()
   const streak = useStreak()
+  const t = useT()
   const initials = initialsOf(account.name)
 
   /**
@@ -110,7 +112,7 @@ export function ProfileScreen({
             )}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Goal: {goalLabels[account.goal]} · {targets.calories} kcal
+            {t("Goal: {goal} · {kcal} kcal", { goal: t(goalLabels[account.goal]), kcal: targets.calories })}
           </p>
         </div>
         {/* Niveau réel (barème XP), plus de valeur en dur. */}
@@ -119,7 +121,7 @@ export function ProfileScreen({
           title={`${xp.totalXp.toLocaleString()} XP · ${xp.level.title}`}
         >
           <Award className="h-3.5 w-3.5" />
-          Lvl {xp.level.level}
+          {t("Level {n}", { n: xp.level.level })}
         </span>
       </header>
 
@@ -145,16 +147,19 @@ export function ProfileScreen({
         <div className="flex-1">
           {isPremium ? (
             <>
-              <p className="font-extrabold">Premium active 👑</p>
+              <p className="font-extrabold">{t("Premium active 👑")}</p>
               <p className="text-sm opacity-70">
-                {premium.plan === "yearly" ? "Yearly" : "Monthly"} plan · unlimited scans
+                {t("{plan} plan · unlimited scans", { plan: t(premium.plan === "yearly" ? "Yearly" : "Monthly") })}
               </p>
             </>
           ) : (
             <>
-              <p className="font-extrabold">Go Premium</p>
+              <p className="font-extrabold">{t("Go Premium")}</p>
               <p className="text-sm opacity-70">
-                {freeScansLeft}/{FREE_SCANS_PER_DAY} free scans left today · unlock unlimited
+                {t("{left}/{total} free scans left today · unlock unlimited", {
+                  left: freeScansLeft,
+                  total: FREE_SCANS_PER_DAY,
+                })}
               </p>
             </>
           )}
@@ -168,7 +173,7 @@ export function ProfileScreen({
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 text-sm font-bold">
               <ScanLine className="h-4 w-4 text-primary" />
-              Today&apos;s scans
+              {t("Today's scans")}
             </span>
             <span className="text-sm font-extrabold tabular-nums">
               {scansUsedToday}/{FREE_SCANS_PER_DAY}
@@ -184,18 +189,18 @@ export function ProfileScreen({
       )}
 
       {/* Corps & progression : résumé du poids + habitudes, avec les accès directs */}
-      <Section title="Body & progress">
+      <Section title={t("Body & progress")}>
         <div className="px-4 py-4">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Current</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Current")}</p>
               <p className="text-2xl font-extrabold tabular-nums">
                 {journey.current}
                 <span className="ml-1 text-sm font-bold text-muted-foreground">kg</span>
               </p>
             </div>
             <div className="text-right">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Target</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Target")}</p>
               <p className="text-2xl font-extrabold tabular-nums text-primary">
                 {journey.target}
                 <span className="ml-1 text-sm font-bold text-muted-foreground">kg</span>
@@ -210,15 +215,17 @@ export function ProfileScreen({
             />
           </div>
           <p className="mt-1.5 text-[11px] font-semibold text-muted-foreground">
-            {journey.pct}% of the way · {Math.abs(journey.toGo)} kg {journey.toGo > 0 ? "to lose" : journey.toGo < 0 ? "to gain" : "— goal reached 🎉"}
-            {journey.since !== null && ` · ${journey.since > 0 ? "+" : ""}${journey.since} kg since your first weigh-in`}
+            {t("{pct}% of the way", { pct: journey.pct })} · {Math.abs(journey.toGo)} kg{" "}
+            {journey.toGo > 0 ? t("to lose") : journey.toGo < 0 ? t("to gain") : t("— goal reached 🎉")}
+            {journey.since !== null &&
+              ` · ${t("{diff} kg since your first weigh-in", { diff: `${journey.since > 0 ? "+" : ""}${journey.since}` })}`}
           </p>
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">
-          <MiniStat label="Streak" value={`${streak}d`} emoji="🔥" />
-          <MiniStat label="Days logged" value={String(xp.daysTracked)} emoji="📅" />
-          <MiniStat label="Weigh-ins" value={String(journey.weighIns)} emoji="⚖️" />
-          <MiniStat label="Level" value={String(xp.level.level)} emoji="🏆" />
+          <MiniStat label={t("Streak")} value={`${streak}d`} emoji="🔥" />
+          <MiniStat label={t("Days logged")} value={String(xp.daysTracked)} emoji="📅" />
+          <MiniStat label={t("Weigh-ins")} value={String(journey.weighIns)} emoji="⚖️" />
+          <MiniStat label={t("Level")} value={String(xp.level.level)} emoji="🏆" />
         </div>
       </Section>
 
@@ -229,37 +236,37 @@ export function ProfileScreen({
       <ShareAppCard />
 
       {/* Tools */}
-      <Section title="Tools">
-        <Row icon={Calculator} label="Calorie calculator" onClick={onOpenCalculator} tone="primary" />
-        <Row icon={Users} label="Communauté — défis & recettes" onClick={onOpenCommunity} tone="primary" />
-        <Row icon={Target} label="Goals & targets" onClick={onOpenSettings} tone="carbs" />
+      <Section title={t("Tools")}>
+        <Row icon={Calculator} label={t("Calorie calculator")} onClick={onOpenCalculator} tone="primary" />
+        <Row icon={Users} label={t("Communauté — défis & recettes")} onClick={onOpenCommunity} tone="primary" />
+        <Row icon={Target} label={t("Goals & targets")} onClick={onOpenSettings} tone="carbs" />
         <Row
           icon={Ruler}
-          label="Body measurements & weight"
+          label={t("Body measurements & weight")}
           onClick={onOpenProgress ?? onOpenSettings}
           tone="steps"
         />
-        <Row icon={CalendarDays} label="Meal history" onClick={onOpenHistory} tone="protein" />
-        <Row icon={BookOpen} label="Revoir le tutoriel" onClick={onOpenTutorial} tone="fat" />
+        <Row icon={CalendarDays} label={t("Meal history")} onClick={onOpenHistory} tone="protein" />
+        <Row icon={BookOpen} label={t("Revoir le tutoriel")} onClick={onOpenTutorial} tone="fat" />
       </Section>
 
       {/* Preferences */}
-      <Section title="Preferences">
+      <Section title={t("Preferences")}>
         <Row
           icon={Bell}
-          label="Notifications"
+          label={t("Notifications")}
           onClick={() => update({ notifications: !account.notifications })}
           trailing={<Toggle on={account.notifications} />}
           tone="fat"
         />
         <Row
           icon={theme === "dark" ? Sun : Moon}
-          label="Dark mode"
+          label={t("Dark mode")}
           onClick={toggle}
           trailing={<Toggle on={theme === "dark"} />}
           tone="protein"
         />
-        <Row icon={ShieldCheck} label="Settings & privacy" onClick={onOpenSettings} tone="steps" />
+        <Row icon={ShieldCheck} label={t("Settings & privacy")} onClick={onOpenSettings} tone="steps" />
       </Section>
 
       <button
@@ -268,7 +275,7 @@ export function ProfileScreen({
         className="flex items-center justify-center gap-2 rounded-2xl border border-border py-3.5 text-sm font-bold text-destructive"
       >
         <LogOut className="h-4 w-4" />
-        Log out
+        {t("Log out")}
       </button>
 
       <p className="text-center text-xs text-muted-foreground">Sahtek v2.0.0</p>

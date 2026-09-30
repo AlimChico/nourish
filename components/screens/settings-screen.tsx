@@ -25,6 +25,7 @@ import {
   Activity,
   Pencil,
   Trophy,
+  Languages,
 } from "lucide-react"
 import { useAccount, type Gender, type Goal } from "@/lib/account"
 import { useSync } from "@/lib/sync"
@@ -34,6 +35,7 @@ import { activityLevels } from "@/lib/nutrition-data"
 import { useTheme } from "@/lib/use-theme"
 import { useXp } from "@/components/use-xp"
 import { cn } from "@/lib/utils"
+import { LOCALES, useLocale, useT } from "@/lib/i18n"
 
 type Section =
   | "root"
@@ -99,6 +101,8 @@ export function SettingsScreen({
     }
   }
   const { theme, toggle } = useTheme()
+  const t = useT()
+  const { locale, setLocale } = useLocale()
   const [section, setSection] = useState<Section>("root")
   const [confirmWipe, setConfirmWipe] = useState(false)
   const [showDeleteAccount, setShowDeleteAccount] = useState(false)
@@ -139,7 +143,7 @@ export function SettingsScreen({
             <ArrowLeft className="h-4 w-4" />
           </button>
         )}
-        <h1 className="text-lg font-extrabold tracking-tight">{titles[section]}</h1>
+        <h1 className="text-lg font-extrabold tracking-tight">{t(titles[section])}</h1>
       </header>
 
       <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-4 pt-4 sm:px-6 sm:pb-6">
@@ -157,7 +161,7 @@ export function SettingsScreen({
             </div>
 
             {/* Niveau / XP / classement */}
-            <Group title="Progress & rewards">
+            <Group title={t("Progress & rewards")}>
               <div className="flex items-center gap-3 px-4 pt-4">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[#0f766e] text-lg font-extrabold text-primary-foreground shadow-[0_6px_18px_rgba(52,211,153,0.3)]">
                   {xp.level.level}
@@ -188,54 +192,88 @@ export function SettingsScreen({
               </div>
               <Row
                 icon={Trophy}
-                label="Leaderboard"
-                desc={status === "authed" ? "Your rank vs all Sahtek players" : "Sign in to appear in the ranking"}
+                label={t("Leaderboard")}
+                desc={t(
+                  status === "authed" ? "Your rank vs all Sahtek players" : "Sign in to appear in the ranking",
+                )}
                 onClick={onOpenLeaderboard}
               />
             </Group>
 
-            <Group title="Your profile">
-              <Row icon={User} label="Account" desc="Name, email" onClick={() => setSection("account")} />
-              <Row icon={Ruler} label="Body profile" desc="Age, height, weight, activity" onClick={() => setSection("body")} />
-              <Row icon={Salad} label="Diet" desc={dietLabel(state)} onClick={() => setSection("diet")} />
-              <Row icon={ShieldAlert} label="Allergies" desc={allergyLabel(state)} onClick={() => setSection("allergies")} />
+            <Group title={t("Your profile")}>
+              <Row icon={User} label={t("Account")} desc={t("Name, email")} onClick={() => setSection("account")} />
+              <Row
+                icon={Ruler}
+                label={t("Body profile")}
+                desc={t("Age, height, weight, activity")}
+                onClick={() => setSection("body")}
+              />
+              <Row icon={Salad} label={t("Diet")} desc={t(dietLabel(state))} onClick={() => setSection("diet")} />
+              <Row icon={ShieldAlert} label={t("Allergies")} desc={allergyLabel(state)} onClick={() => setSection("allergies")} />
             </Group>
 
-            <Group title="Targets">
+            <Group title={t("Targets")}>
               <Row
                 icon={Target}
-                label="Daily calories"
-                desc={`${targets.calories} kcal · ${targets.protein}g protein`}
+                label={t("Daily calories")}
+                desc={t("{kcal} kcal · {g}g protein", { kcal: targets.calories, g: targets.protein })}
                 onClick={() => setSection("goals")}
               />
               <Row
                 icon={Flame}
-                label="BMR & TDEE"
-                desc={`BMR ${targets.bmr} kcal · maintenance ${targets.tdee} kcal`}
+                label={t("BMR & TDEE")}
+                desc={t("BMR {bmr} kcal · maintenance {tdee} kcal", { bmr: targets.bmr, tdee: targets.tdee })}
                 onClick={() => setSection("goals")}
               />
               <Row
                 icon={Download}
-                label="Export my data"
-                desc="Download everything as JSON"
+                label={t("Export my data")}
+                desc={t("Download everything as JSON")}
                 onClick={exportData}
               />
-              <Row icon={Droplets} label="Water goal" desc={`${state.waterGoal} glasses / day`} onClick={() => setSection("goals")} />
-              <Row icon={Footprints} label="Steps goal" desc={`${state.stepGoal.toLocaleString()} steps / day`} onClick={() => setSection("goals")} />
+              <Row
+                icon={Droplets}
+                label={t("Water goal")}
+                desc={t("{n} glasses / day", { n: state.waterGoal })}
+                onClick={() => setSection("goals")}
+              />
+              <Row
+                icon={Footprints}
+                label={t("Steps goal")}
+                desc={t("{n} steps / day", { n: state.stepGoal.toLocaleString() })}
+                onClick={() => setSection("goals")}
+              />
             </Group>
 
-            <Group title="App">
+            <Group title={t("App")}>
+              {/* Langue — en tête du groupe : c'est le réglage qu'on cherche en
+                  premier quand l'app ne s'affiche pas dans sa langue. Un tap
+                  passe à la langue suivante (anglais → français → derja). */}
+              <Row
+                icon={Languages}
+                label={t("App language")}
+                desc={t("Used everywhere in the app")}
+                onClick={() => {
+                  const i = LOCALES.findIndex((l) => l.code === locale)
+                  setLocale((LOCALES[(i + 1) % LOCALES.length] ?? LOCALES[0]!).code)
+                }}
+                trailing={
+                  <span className="text-sm font-extrabold text-primary">
+                    {LOCALES.find((l) => l.code === locale)?.label}
+                  </span>
+                }
+              />
               <Row
                 icon={theme === "dark" ? Sun : Moon}
-                label="Dark mode"
-                desc="Aurora night theme"
+                label={t("Dark mode")}
+                desc={t("Aurora night theme")}
                 onClick={toggle}
                 trailing={<Toggle on={theme === "dark"} />}
               />
               {notif.permission === "granted" && state.notifications && (
                 <Row
                   icon={BellRing}
-                  label="Rappel calories du jour"
+                  label={t("Rappel calories du jour")}
                   desc={notif.digest.enabled ? `Chaque jour à ${notif.digest.hour}h — kcal restantes` : "Désactivé"}
                   onClick={() => notif.setDigest({ ...notif.digest, enabled: !notif.digest.enabled })}
                   trailing={<Toggle on={notif.digest.enabled} />}
@@ -244,8 +282,8 @@ export function SettingsScreen({
               {notif.permission === "granted" && state.notifications && notif.digest.enabled && (
                 <Row
                   icon={Bell}
-                  label="Heure du rappel"
-                  desc="Entre 12h et 22h"
+                  label={t("Heure du rappel")}
+                  desc={t("Entre 12h et 22h")}
                   onClick={() => notif.setDigest({ ...notif.digest, hour: (notif.digest.hour % 10) + 12 })}
                   trailing={<span className="text-sm font-extrabold text-primary">{notif.digest.hour}:00</span>}
                 />
@@ -256,7 +294,7 @@ export function SettingsScreen({
                 MEAL_REMINDERS.map((def) => <MealReminderRow key={def.key} def={def} />)}
               <Row
                 icon={Bell}
-                label="Notifications"
+                label={t("Notifications")}
                 desc={
                   notif.permission === "granted"
                     ? "On — streak, goal & inactivity reminders"
@@ -278,11 +316,11 @@ export function SettingsScreen({
                   )
                 }
               />
-              <Row icon={ShieldCheck} label="Privacy & data" onClick={() => setSection("privacy")} />
+              <Row icon={ShieldCheck} label={t("Privacy & data")} onClick={() => setSection("privacy")} />
               {push.supported && push.configured && (
                 <Row
                   icon={BellRing}
-                  label="Rappel même app fermée"
+                  label={t("Rappel même app fermée")}
                   desc={
                     push.loading
                       ? "…"
@@ -302,20 +340,20 @@ export function SettingsScreen({
               )}
             </Group>
 
-            <Group title="Privacy & legal">
+            <Group title={t("Privacy & legal")}>
               <Row
                 icon={ScrollText}
-                label="Politique de confidentialité"
-                desc="Données, pubs, partage, contacts"
+                label={t("Politique de confidentialité")}
+                desc={t("Données, pubs, partage, contacts")}
                 onClick={() => window.open("/privacy", "_blank")}
               />
             </Group>
 
-            <Group title="Compte">
+            <Group title={t("Compte")}>
               <Row
                 icon={UserMinus}
-                label="Supprimer mon compte"
-                desc="Efface données + compte, définitif"
+                label={t("Supprimer mon compte")}
+                desc={t("Efface données + compte, définitif")}
                 onClick={() => setShowDeleteAccount(true)}
               />
             </Group>

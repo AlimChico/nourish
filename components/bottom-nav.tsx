@@ -3,9 +3,13 @@
 import { Home, Utensils, TrendingUp, Dumbbell, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { haptic } from "@/lib/haptic"
+import { useT } from "@/lib/i18n"
 
 export type TabKey = "home" | "food" | "progress" | "workout" | "profile"
 
+// Les libellés sont les textes SOURCES anglais : la traduction est appliquée au
+// rendu (voir lib/i18n.tsx), la barre se met donc à jour immédiatement quand on
+// change de langue.
 const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
   { key: "home", label: "Home", icon: Home },
   { key: "food", label: "Food", icon: Utensils },
@@ -33,6 +37,7 @@ const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
  * en permanence, jamais de saut ni de décalage.
  */
 export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab: TabKey) => void }) {
+  const t = useT()
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 w-full px-3 sm:absolute sm:inset-x-0 sm:bottom-0 sm:z-30 sm:px-6 sm:pt-3">
       {/* Flou progressif iOS (mobile) : backdrop-blur masqué — flou fort au bord
@@ -53,16 +58,16 @@ export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab
         aria-label="Main navigation"
         className="surface-dark pointer-events-auto mx-auto mb-[calc(env(safe-area-inset-bottom,0px)+14px)] mt-2.5 flex w-full max-w-md items-stretch rounded-[1.55rem] border border-[#a7f3d0]/15 bg-[#0d1a13]/90 shadow-[0_18px_44px_rgba(0,0,0,0.55),0_4px_12px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(167,243,208,0.07)] backdrop-blur-xl sm:mb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] sm:mt-0"
       >
-        {tabs.map((t) => {
-          const Icon = t.icon
-          const isActive = active === t.key
+        {tabs.map((tab) => {
+          const Icon = tab.icon
+          const isActive = active === tab.key
           return (
             <button
-              key={t.key}
+              key={tab.key}
               type="button"
               onClick={() => {
                 haptic("light")
-                onChange(t.key)
+                onChange(tab.key)
               }}
               aria-current={isActive ? "page" : undefined}
               className="group relative flex min-h-[56px] min-w-0 flex-1 flex-col items-center justify-center rounded-[1.3rem] py-2 transition-transform duration-150 active:scale-90 sm:min-h-[60px] sm:py-2.5"
@@ -87,7 +92,7 @@ export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab
                   isActive ? "text-primary" : "text-muted-foreground",
                 )}
               >
-                {t.label}
+                {t(tab.label)}
               </span>
             </button>
           )

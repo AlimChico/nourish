@@ -72,6 +72,7 @@ import { SmartNotificationsProvider } from "@/lib/notifications"
 import { AutoPushBridge } from "@/lib/auto-push"
 import { WeightProvider } from "@/lib/weight"
 import { markTutorialSeen, tutorialSeen } from "@/lib/tutorial"
+import { LocaleProvider } from "@/lib/i18n"
 
 type Overlay =
   | "none"
@@ -250,20 +251,24 @@ function AppShell() {
 
 export default function Page() {
   return (
-    <SyncProvider>
-      <AccountProvider>
+    // LocaleProvider en tête : la langue doit être disponible avant tout écran,
+    // y compris le splash et l'onboarding qui n'ont pas encore de compte.
+    <LocaleProvider>
+      <SyncProvider>
+        <AccountProvider>
         <PremiumProvider>
           <FoodLogProvider>
             <HealthProvider>
               <WeightProvider>
                 <SmartNotificationsProvider>
                   <AppShell />
-                </SmartNotificationsProvider>
-              </WeightProvider>
-            </HealthProvider>
-          </FoodLogProvider>
-        </PremiumProvider>
-      </AccountProvider>
-    </SyncProvider>
+                  </SmartNotificationsProvider>
+                </WeightProvider>
+              </HealthProvider>
+            </FoodLogProvider>
+          </PremiumProvider>
+        </AccountProvider>
+      </SyncProvider>
+    </LocaleProvider>
   )
 }

@@ -31,6 +31,7 @@ import { useXp } from "@/components/use-xp"
 import { appDateKey } from "@/lib/date-key"
 import { barWidth, cn } from "@/lib/utils"
 import { haptic } from "@/lib/haptic"
+import { useT, useWeekLetters } from "@/lib/i18n"
 
 const dayKeyOf = (d: Date) => appDateKey(d)
 
@@ -48,6 +49,12 @@ function timeLabel(at?: number): string {
   } catch {
     return ""
   }
+}
+
+/** Nom du repas traduit — `mealMeta` ne contient que les sources anglaises. */
+function useMealName(): (key: MealKey) => string {
+  const t = useT()
+  return (key) => t(mealMeta[key].name)
 }
 
 /** Dynamic motivational line — derived only from the user's real numbers. */
@@ -95,6 +102,7 @@ export function HomeScreen({
   onOpenCoach?: () => void
   onOpenLeaderboard?: () => void
 }) {
+  const weekLetters = useWeekLetters()
   const { state, addWater } = useFoodLog()
   const { state: account, targets } = useAccount()
   const {
@@ -108,6 +116,7 @@ export function HomeScreen({
   } = useHealth()
   const streak = useStreak()
   const xp = useXp()
+  const t = useT()
 
   const totals = useMemo(() => dayTotals(state.meals), [state.meals])
   const eaten = Math.round(totals.calories)
@@ -120,7 +129,7 @@ export function HomeScreen({
   const hasLogged = Object.values(state.meals).some((m) => m.length > 0)
   const firstName = account.name.trim().split(/\s+/)[0] ?? ""
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
+  const greeting = t(hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening")
   const motivation = motivationFor({ eaten, target, remaining, hasLogged, hour })
 
   /**
@@ -150,7 +159,7 @@ export function HomeScreen({
 
   /** Current week (Mon → Sun), real data: history calories or today's live totals + steps. */
   const weekDays = useMemo(() => {
-    const labels = ["M", "T", "W", "T", "F", "S", "S"]
+    const labels = weekLetters
     const now = new Date()
     const startOffset = (now.getDay() + 6) % 7 // days since Monday
     return labels.map((label, i) => {
@@ -163,7 +172,7 @@ export function HomeScreen({
       const steps = healthState.days[key]?.steps ?? 0
       return { label, key, isToday, isFuture, complete: calories > 0 || steps > 3000 }
     })
-  }, [state.date, state.history, state.meals, totals.calories, healthState.days])
+  }, [state.date, state.history, state.meals, totals.calories, healthState.days, weekLetters])
 
   return (
     <div className="mx-auto flex w-full flex-col gap-4 px-4 pb-4 pt-2 sm:gap-5 sm:px-6 sm:pb-6">
@@ -174,7 +183,7 @@ export function HomeScreen({
             {greeting}
             {firstName ? `, ${firstName}` : ""} 👋
           </h1>
-          <p className="text-sm text-muted-foreground">Let&apos;s reach your goal today.</p>
+          <p className="text-sm text-muted-foreground">{t("Let's reach your goal today.")}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -217,7 +226,7 @@ export function HomeScreen({
             progressClassName={isOver ? "text-destructive" : "text-calories"}
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-              {isOver ? "Over budget" : "Remaining"}
+              {t(isOver ? "Over budget" : "Remaining")}
             </p>
             <p
               className={cn(
@@ -229,7 +238,7 @@ export function HomeScreen({
             </p>
             <p className="mt-1 text-xs font-bold text-muted-foreground">kcal</p>
             <p className="mt-2 rounded-full bg-muted/60 px-2.5 py-1 text-[10px] font-bold tabular-nums text-muted-foreground">
-              {eaten.toLocaleString()} / {target.toLocaleString()} eaten
+              {t("{done} / {goal} eaten", { done: eaten.toLocaleString(), goal: target.toLocaleString() })}
             </p>
           </ProgressRing>
 
@@ -239,7 +248,7 @@ export function HomeScreen({
               icon={<Droplets className="h-4 w-4" />}
               iconBg="bg-water-soft"
               iconTone="text-water"
-              label="Water"
+              label={t("Water")}
               value={waterLabel(state.water, targets.water)}
               progress={Math.min((state.water / Math.max(targets.water, 1)) * 100, 100)}
               bar="bg-water"
@@ -280,7 +289,7 @@ export function HomeScreen({
               icon={<Dumbbell className="h-4 w-4" />}
               iconBg="bg-fat-soft"
               iconTone="text-fat"
-              label="Workout"
+              label={t("Workout")}
               value={`${health.workoutMinutes} / 30 min`}
               progress={Math.min((health.workoutMinutes / 30) * 100, 100)}
               bar="bg-fat"
@@ -296,11 +305,11 @@ export function HomeScreen({
               }
             />
             <div className="grid grid-cols-2 gap-2">
-              <QuickStat icon={<Flame className="h-3.5 w-3.5" />} tone="text-fat" label="Burn" value={`${burn} kcal`} />
+              <QuickStat icon={<Flame className="h-3.5 w-3.5" />} tone="text-fat" label={t("Burn")} value={`${burn} kcal`} />
               <QuickStat
                 icon={<Footprints className="h-3.5 w-3.5" />}
                 tone="text-steps"
-                label="Steps"
+                label={t("Steps")}
                 value={health.steps.toLocaleString()}
               />
             </div>
@@ -309,8 +318,8 @@ export function HomeScreen({
 
         <p className="mt-4 text-center text-[11px] font-semibold text-muted-foreground sm:text-left">
           {isOver
-            ? `${(eaten - target).toLocaleString()} kcal above your daily goal`
-            : `${pct.toFixed(0)}% of today's ${target.toLocaleString()} kcal goal`}
+            ? t("{n} kcal above your daily goal", { n: (eaten - target).toLocaleString() })
+            : t("{pct}% of today's {goal} kcal goal", { pct: pct.toFixed(0), goal: target.toLocaleString() })}
         </p>
       </section>
 
@@ -324,7 +333,7 @@ export function HomeScreen({
         className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-base font-bold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] sm:mx-auto sm:w-full sm:max-w-sm"
       >
         <Plus className="h-5 w-5" strokeWidth={2.5} />
-        Add food
+        {t("Add food")}
       </button>
 
       {/* ══ d) Streak + macros du jour regroupés dans une seule carte ══ */}
@@ -332,9 +341,9 @@ export function HomeScreen({
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-1.5 text-base font-extrabold tracking-tight">
             <span aria-hidden>🔥</span>
-            {streak} day streak
+            {t("{n} day streak", { n: streak })}
           </h2>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">This week</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("This week")}</span>
         </div>
         <div className="mt-3 flex items-start justify-between px-0.5">
           {weekDays.map((d) => (
@@ -399,7 +408,7 @@ export function HomeScreen({
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
               <p className="truncate text-sm font-extrabold tracking-tight">
-                Level {xp.level.level}
+                {t("Level {n}", { n: xp.level.level })}
                 <span className="ml-1.5 font-bold text-muted-foreground">{xp.level.title}</span>
               </p>
               <span className="shrink-0 text-xs font-extrabold tabular-nums text-primary">
@@ -415,9 +424,9 @@ export function HomeScreen({
             </div>
             <p className="mt-1.5 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
               <span className="tabular-nums">
-                {xp.level.intoLevel} / {xp.level.forNext} XP → level {xp.level.level + 1}
+                {t("{a} / {b} XP → level {n}", { a: xp.level.intoLevel, b: xp.level.forNext, n: xp.level.level + 1 })}
               </span>
-              <span className="tabular-nums text-primary">+{xp.todayXp} today</span>
+              <span className="tabular-nums text-primary">{t("+{n} today", { n: xp.todayXp })}</span>
             </p>
           </div>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -430,21 +439,24 @@ export function HomeScreen({
       {/* ══ g) Widgets secondaires ══ */}
       <section className="flex items-center gap-3 rounded-2xl border border-[#a7f3d0]/10 bg-accent p-3.5">
         <span className="text-xl">{motivation.emoji}</span>
-        <p className="text-sm font-semibold text-accent-foreground">{motivation.text}</p>
+        <p className="text-sm font-semibold text-accent-foreground">{t(motivation.text)}</p>
       </section>
 
       <section className="flex items-center justify-between gap-2 rounded-2xl border border-[#a7f3d0]/10 bg-card px-4 py-3 shadow-sm">
         <span className="text-xs font-semibold text-muted-foreground">
-          Net calories
-          <span className="ml-1 font-normal">(food − workout burn)</span>
+          {t("Net calories")}
+          <span className="ml-1 font-normal">{t("(food − workout burn)")}</span>
         </span>
         <div className="flex shrink-0 items-center gap-2">
           <span className="text-sm font-extrabold tabular-nums">
             {Math.max(0, Math.round(totals.calories - burn)).toLocaleString()} kcal
-            {burn > 0 && <span className="ml-1 text-xs font-bold text-primary">−{burn} burn</span>}
+            {burn > 0 && <span className="ml-1 text-xs font-bold text-primary">−{t("{n} burn", { n: burn })}</span>}
           </span>
           <ShareButton
-            text={`I've eaten ${eaten} kcal today on Sahtek — ${remaining} kcal left of my goal! 🥗🔥`}
+            text={t("I've eaten {eaten} kcal today on Sahtek — {left} kcal left of my goal! 🥗🔥", {
+              eaten,
+              left: remaining,
+            })}
           />
         </div>
       </section>
@@ -479,6 +491,8 @@ function LastScanCard({
   others: ScanEntry[]
   onOpenMeals: () => void
 }) {
+  const t = useT()
+  const mealName = useMealName()
   const kcal = Math.round(scan.food.calories * scan.quantity)
   return (
     <section className="animate-fade-in overflow-hidden rounded-3xl border border-[#a7f3d0]/12 bg-card shadow-sm">
@@ -487,10 +501,10 @@ function LastScanCard({
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-primary">
             <Camera className="h-3.5 w-3.5" />
           </span>
-          Last scanned meal
+          {t("Last scanned meal")}
         </h2>
         <span className="text-[11px] font-semibold text-muted-foreground">
-          {mealMeta[scan.meal].emoji} {mealMeta[scan.meal].name}
+          {mealMeta[scan.meal].emoji} {mealName(scan.meal)}
           {scan.at ? ` · ${timeLabel(scan.at)}` : ""}
         </span>
       </div>
@@ -560,7 +574,7 @@ function LastScanCard({
         onClick={onOpenMeals}
         className="flex w-full items-center justify-between border-t border-border px-4 py-2.5 text-xs font-bold text-primary active:scale-[0.99]"
       >
-        See it in {mealMeta[scan.meal].name}
+        {t("See it in {meal}", { meal: mealName(scan.meal) })}
         <ChevronRight className="h-4 w-4" />
       </button>
     </section>
@@ -578,15 +592,17 @@ function MealsBlock({ onAddFood }: { onAddFood: (meal?: MealKey) => void }) {
   const [editing, setEditing] = useState<string | null>(null)
 
   const entries = state.meals[active]
-  const t = totalsFor(entries)
+  const macros = totalsFor(entries)
+  const t = useT()
+  const mealName = useMealName()
   const dayTotal = useMemo(() => dayTotals(state.meals), [state.meals])
 
   return (
     <section className="rounded-3xl border border-[#a7f3d0]/10 bg-card shadow-sm">
       <div className="flex items-center justify-between px-4 pt-4">
-        <h2 className="text-base font-extrabold tracking-tight">Today&apos;s meals</h2>
+        <h2 className="text-base font-extrabold tracking-tight">{t("Today's meals")}</h2>
         <span className="text-[11px] font-bold tabular-nums text-muted-foreground">
-          {Math.round(dayTotal.calories).toLocaleString()} kcal total
+          {t("{n} kcal total", { n: Math.round(dayTotal.calories).toLocaleString() })}
         </span>
       </div>
 
@@ -611,7 +627,7 @@ function MealsBlock({ onAddFood }: { onAddFood: (meal?: MealKey) => void }) {
               )}
             >
               <span className="text-lg">{mealMeta[key].emoji}</span>
-              <span className="truncate">{mealMeta[key].name}</span>
+              <span className="truncate">{mealName(key)}</span>
               <span className={cn("tabular-nums", isActive ? "text-primary" : "text-muted-foreground/80")}>
                 {Math.round(m.calories)} kcal
               </span>
@@ -623,15 +639,15 @@ function MealsBlock({ onAddFood }: { onAddFood: (meal?: MealKey) => void }) {
       <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-2.5">
         <p className="min-w-0 truncate text-xs text-muted-foreground">
           {entries.length === 0
-            ? `Nothing in ${mealMeta[active].name} yet`
-            : `P ${Math.round(t.protein)}g · C ${Math.round(t.carbs)}g · F ${Math.round(t.fat)}g · ${entries.length} item${entries.length > 1 ? "s" : ""}`}
+            ? t("Nothing in {meal} yet", { meal: mealName(active) })
+            : `P ${Math.round(macros.protein)}g · C ${Math.round(macros.carbs)}g · F ${Math.round(macros.fat)}g · ${entries.length === 1 ? t("1 item") : t("{n} items", { n: entries.length })}`}
         </p>
         <button
           type="button"
           onClick={() => onAddFood(active)}
           className="flex shrink-0 items-center gap-1 rounded-xl bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground active:scale-95"
         >
-          <Plus className="h-3.5 w-3.5" strokeWidth={3} /> Add
+          <Plus className="h-3.5 w-3.5" strokeWidth={3} /> {t("Add")}
         </button>
       </div>
 
@@ -689,6 +705,8 @@ function EntryRow({
   onMove: (to: MealKey) => void
   onDelete: () => void
 }) {
+  const t = useT()
+  const mealName = useMealName()
   return (
     <div className="rounded-2xl py-1.5">
       <button type="button" onClick={onToggleEdit} className="flex w-full items-center gap-3 text-left active:scale-[0.99]">
@@ -716,7 +734,7 @@ function EntryRow({
       {editing && (
         <div className="mt-2 animate-fade-in rounded-2xl bg-muted/50 p-3">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Portion</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Portion")}</p>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -738,7 +756,7 @@ function EntryRow({
             </div>
           </div>
 
-          <p className="mt-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">Move to</p>
+          <p className="mt-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Move to")}</p>
           <div className="mt-1.5 grid grid-cols-4 gap-1.5">
             {mealOrder.map((k) => (
               <button
@@ -746,14 +764,14 @@ function EntryRow({
                 type="button"
                 onClick={() => onMove(k)}
                 disabled={k === meal}
-                aria-label={`Move to ${mealMeta[k].name}`}
+                aria-label={t("Move to {meal}", { meal: mealName(k) })}
                 className={cn(
                   "flex flex-col items-center rounded-xl border py-1.5 text-[10px] font-bold active:scale-95 disabled:opacity-40",
                   k === meal ? "border-primary bg-primary/15 text-foreground" : "border-border bg-card text-muted-foreground",
                 )}
               >
                 <span className="text-base">{mealMeta[k].emoji}</span>
-                {mealMeta[k].name}
+                {mealName(k)}
               </button>
             ))}
           </div>
@@ -763,7 +781,7 @@ function EntryRow({
             onClick={onDelete}
             className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-destructive/15 py-2 text-xs font-bold text-destructive active:scale-[0.98]"
           >
-            <Trash2 className="h-3.5 w-3.5" /> Supprimer cet aliment
+            <Trash2 className="h-3.5 w-3.5" /> {t("Delete this food")}
           </button>
         </div>
       )}
@@ -800,13 +818,14 @@ function QuickStat({
 }
 
 function MacroMini({ macroKey, value, target }: { macroKey: MacroKey; value: number; target: number }) {
+  const t = useT()
   const meta = macroMeta[macroKey]
   const pct = Math.min((value / Math.max(target, 1)) * 100, 100)
   const done = value >= target
   return (
     <div className="rounded-2xl bg-muted/40 p-2.5 sm:p-3">
       <div className="flex items-center justify-between">
-        <p className={cn("text-[10px] font-bold sm:text-xs", meta.text)}>{meta.label}</p>
+        <p className={cn("text-[10px] font-bold sm:text-xs", meta.text)}>{t(meta.label)}</p>
         {done && <Check className={cn("h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5", meta.text)} strokeWidth={3} />}
       </div>
       <p className="mt-1 text-sm font-extrabold tabular-nums leading-none sm:text-base">
@@ -877,6 +896,7 @@ function HealthSyncCard({
   onAddSteps: () => void
   onAddWorkout: () => void
 }) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   return (
     <section className="rounded-2xl border border-[#a7f3d0]/10 bg-card p-4 shadow-sm">
@@ -886,15 +906,15 @@ function HealthSyncCard({
             <span aria-hidden>⌚</span>
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-extrabold">Phone health sync</p>
+            <p className="text-sm font-extrabold">{t("Phone health sync")}</p>
             <p className="truncate text-xs text-muted-foreground">
               {sensorAvailable
                 ? sensorPermission === "granted"
-                  ? "Motion sensors active — counting your steps 🚶"
+                  ? t("Motion sensors active — counting your steps 🚶")
                   : sensorPermission === "denied"
-                    ? "Motion access denied — add manually below"
-                    : "Count steps with your phone's motion sensors"
-                : "Desktop detected — add steps & workouts manually"}
+                    ? t("Motion access denied — add manually below")
+                    : t("Count steps with your phone's motion sensors")
+                : t("Desktop detected — add steps & workouts manually")}
             </p>
           </div>
         </div>
@@ -909,7 +929,7 @@ function HealthSyncCard({
             disabled={busy}
             className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground active:scale-95"
           >
-            {busy ? "…" : "Enable"}
+            {busy ? "…" : t("Enable")}
           </button>
         )}
       </div>
@@ -919,14 +939,14 @@ function HealthSyncCard({
           onClick={onAddSteps}
           className="rounded-xl bg-muted py-2 text-xs font-bold active:scale-95"
         >
-          + 1,000 steps
+          {t("+ 1,000 steps")}
         </button>
         <button
           type="button"
           onClick={onAddWorkout}
           className="rounded-xl bg-muted py-2 text-xs font-bold active:scale-95"
         >
-          + 15 min workout
+          {t("+ 15 min workout")}
         </button>
       </div>
     </section>
@@ -938,6 +958,7 @@ function SuggestionsCard({ remaining }: { remaining: number }) {
   const suggestions = useMemo(() => suggestRecipes(remaining), [remaining])
   const { addFood } = useFoodLog()
   const [added, setAdded] = useState<string | null>(null)
+  const t = useT()
 
   const quickAdd = (name: string, kcal: number, protein: number, carbs: number, fat: number, emoji: string) => {
     addFood(
@@ -960,7 +981,7 @@ function SuggestionsCard({ remaining }: { remaining: number }) {
       <div className="mb-3 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-base font-extrabold">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-primary">🍽️</span>
-          Fits your {remaining.toLocaleString()} kcal left
+          {t("Fits your {n} kcal left", { n: remaining.toLocaleString() })}
         </h2>
       </div>
       <div className="flex snap-x gap-2 overflow-x-auto no-scrollbar pb-1 sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible">
@@ -985,11 +1006,11 @@ function SuggestionsCard({ remaining }: { remaining: number }) {
             >
               {added === s.name ? (
                 <>
-                  <Check className="h-3.5 w-3.5" strokeWidth={3} /> Added!
+                  <Check className="h-3.5 w-3.5" strokeWidth={3} /> {t("Added!")}
                 </>
               ) : (
                 <>
-                  <Plus className="h-3.5 w-3.5" strokeWidth={3} /> Quick add
+                  <Plus className="h-3.5 w-3.5" strokeWidth={3} /> {t("Quick add")}
                 </>
               )}
             </button>
@@ -1041,12 +1062,13 @@ const TIPS = [
 function TipCard() {
   const day = new Date().getDate() % TIPS.length
   const tip = TIPS[day]
+  const t = useT()
   return (
     <section className="flex items-center gap-3 rounded-2xl border border-[#a7f3d0]/15 bg-card p-4 shadow-sm">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-xl">
         {tip.emoji}
       </span>
-      <p className="text-sm font-medium text-muted-foreground">{tip.text}</p>
+      <p className="text-sm font-medium text-muted-foreground">{t(tip.text)}</p>
     </section>
   )
 }
