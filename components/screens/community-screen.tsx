@@ -8,7 +8,7 @@ import { useFoodLog } from "@/lib/food-log"
 import { useHealth } from "@/lib/health"
 import { useStreak } from "@/components/use-streak"
 import { shareLink, nativeShare, openInstagramStory, openTikTok } from "@/lib/share"
-import { cn } from "@/lib/utils"
+import { barWidth, cn } from "@/lib/utils"
 
 type Recipe = {
   id: string
@@ -336,7 +336,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
   const myRank = leaderboard.findIndex((l) => l.userId === user?.id) + 1
 
   return (
-    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up sm:mx-auto sm:max-w-2xl sm:border-x sm:border-[#a7f3d0]/10 sm:shadow-2xl">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background aurora-glow animate-slide-up sm:mx-auto sm:max-w-2xl sm:border-x sm:border-[#a7f3d0]/10 sm:shadow-2xl">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 sm:px-6">
         <div className="flex items-center gap-2">
@@ -456,7 +456,10 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
                     <>
                       <div className="mt-3 flex items-center gap-2">
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                          <div className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400 transition-all duration-700" style={{ width: `${pct}%` }} />
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400 transition-all duration-700"
+                            style={{ width: barWidth(pct) }}
+                          />
                         </div>
                         <span className="text-xs font-extrabold tabular-nums">{pts}/{c.goalPoints}</span>
                       </div>
@@ -601,7 +604,7 @@ export function CommunityScreen({ onClose }: { onClose: () => void }) {
 
       {/* Composer */}
       {showComposer && (
-        <div className="safe-top absolute inset-0 z-10 flex flex-col bg-background animate-slide-up sm:mx-auto sm:max-w-2xl sm:border-x sm:border-[#a7f3d0]/10 sm:shadow-2xl">
+        <div className="safe-top absolute inset-0 z-10 flex flex-col bg-background aurora-glow animate-slide-up sm:mx-auto sm:max-w-2xl sm:border-x sm:border-[#a7f3d0]/10 sm:shadow-2xl">
           <div className="flex items-center justify-between px-5 py-3 sm:px-6">
             <h2 className="text-lg font-extrabold">Partager une recette</h2>
             <button

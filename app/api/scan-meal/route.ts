@@ -19,39 +19,80 @@ type ScanResponse = {
   description: string
   items: DetectedFood[]
   tips: string
-  source: "ai" | "demo"
-  error?: string
+  source: "ai"
+  error?: "NO_FOOD"
+  message?: string
 }
 
-const SYSTEM_PROMPT = `You are a nutrition vision expert. Analyze the meal photo and identify EVERY food you can see.
+type ScanErrorCode = "AI_UNAVAILABLE" | "AI_QUOTA" | "AI_TIMEOUT" | "RATE_LIMIT" | "BAD_IMAGE"
 
-TUNISIAN CUISINE IS YOUR SPECIALTY 🇹🇳 — recognize these dishes precisely and use their local names:
-- lablabi (~450 kcal/bol : pain rassis, houmous, harissa, huile d'olive, œuf, cumin), kosksi/couscous (~600 kcal/assiette : semoule, viande ou poisson, légumes), masfouf (~550 : couscous sucré, raisins, dattes)
-- brik/brika à l'œuf (~300/pièce : feuille malaouech, thon, œuf, persil, frit), fricassé (~350/sandwich), kaftaji (~400 : frits mélangés, pomme de terre, tomate, poivron)
-- mloukhia (~400 : feuilles de corète, viande, très sombre), kamounia (~450 : viande, cumin), mar9a (~350 : ragoût), ojja (~400 : sauce tomate pimentée, œufs ou merguez), shakshuka (~300)
-- chorba/selte9 (~200/bol : soupe orge, viande, légumes), slata mechouia (~100 : poivrons grillés, tomate, huile d'olive, thon), slata tunisienne (~80)
-- tajine tunisien (~450 : œufs, viande, fromage — GATEAU, pas marocain), assida (~500 : semoule, miel, pignons), zriga/madaba si visibles
-- djej machwi (poulet grillé ~240/150g), 7out/hout (poisson ~180/150g : dorade, merlan, sardines ~200/4 pièces), calamar frit (~250)
-- khobz tabouna (~90/tranche), harissa (~15/cuillère), zit zitouna (huile d'olive ~90/cuillère), laban/rayeb (~110/pot), jben (~80/portion)
-- déjeuners rapides : ton sandwich (~350), frit bileh? décrire ce qui est visible
-Pour chaque plat tunisien : cite son NOM LOCAL, estime la portion réaliste (pain = 60g, bol lablabi = 400g…), et base tes kcal sur les ordres de grandeur ci-dessus.
-Produits emballés tunisiens courants : si l'étiquette/marque est visible (Dehia, Sama, Délice Danone, Vikar, Bonna, Sophien…), lis les valeurs de l'étiquette plutôt qu'estimer.
+/**
+ * Réponse d'erreur EXPLICITE : plus jamais de faux plat « estimation manuelle ».
+ * L'utilisateur qui vient de prendre une photo doit savoir que le scanner ne
+ * marche pas, pas recevoir trois aliments inventés.
+ */
+function scanError(code: ScanErrorCode, message: string, status: number) {
+  return Response.json({ error: code, message } satisfies { error: ScanErrorCode; message: string }, { status })
+}
+
+const SYSTEM_PROMPT = `You are a nutrition vision expert specialized in TUNISIAN cuisine 🇹🇳. Analyze the meal photo and identify EVERY food you can see.
+
+=== TUNISIAN DISH REFERENCE (use the LOCAL name + these realistic calories) ===
+STEWS & MAIN DISHES (mar9a / plats)
+- lablabi (400 g bowl): ~450 kcal — stale bread, chickpeas, harissa, olive oil, egg, cumin, tuna
+- kosksi / couscous: chicken ~620, lamb ~720, fish (7out) ~580, vegetables ~420, osbane ~700, borghol djerbi ~560
+- masfouf (sweet couscous, raisins/dates) ~550 · kosksi hlou ~600
+- mloukhia (dark corète leaves + beef, 300 g) ~480 · mloukhia korros
+- kamounia (beef + cumin) ~430 · marqa h'rous ~380 · mar9a tounsia ~350
+- ojja: merguez ~640, shrimp/crevettes ~380, chicken ~520, plain egg+tomato ~330
+- tajine tunisien (egg/meat/cheese mousse — a SAVOURY CAKE, not Moroccan) ~460
+- kabkabou (fish + capers + tomato) ~420 · riz jerbi (tomato/pepper rice) ~450
+- mhamsa bel hout ~480 · nwasser/nouaisser ~430 · tlitli (small pasta) ~400
+- douwida (barley + herbs) ~300 · borghol bel khodra ~360 · pkaïla (chard + meat) ~380
+- chakchouka ~320 · slata mechouia (grilled pepper/tomato salad) ~140 · slata tounsia ~110
+- chorba frik ~210 · chorba h'ris ~280 · selte9? → dchicha (barley soup) ~180
+
+STREET FOOD & SNACKS
+- brik / brika à l'œuf ~310 per piece · brik au thon ~340 · fricassé (tuna sandwich) ~380
+- kafteji (fried veg + pumpkin + potato, fried egg) ~620 · + meat ~720 · + egg ~680
+- mlewi (mlawi) ~330 · msemen ~300 · mtabga ~350 · chapati/késra ~280
+- khobz tabouna ~90 per slice · baguette ~250 · pain complet ~130
+- grilled: djej machwi (chicken breast 150 g) ~240 · kefta/merguez grilled ~250 per 100 g · sardines ~200 per 4 · poisson grillé (dorade/merlan 150 g) ~180 · calamar frit ~250
+- assida (semolina + honey/pignons) ~500 · bouza · zriga ~420
+
+SWEETS (Tunisian pastry is very sweet — estimate generously)
+- bambalouni (fried dough + sugar) ~290 per piece · zlabia ~150 per 2-3 pieces
+- makroudh (date semolina) ~210 per piece · ka'ak warka ~180 · baklawa ~300 per slice
+- ghriba (almond) ~150 · samsa ~220 · deblah ~200 · mkhabez ~190 · mazra? describe what you see
+
+DAIRY, DRINKS & EXTRAS
+- jben (fresh cheese) ~80 per portion · rayeb/lben (fermented milk, 250 ml) ~110 · yaourt ~80
+- thé à la menthe (sugar) ~60 per glass · café turc/express ~5-25 · citronnade ~90 (with chia ~110)
+- harissa ~25 per tbsp · zit zitouna (olive oil) ~90 per tbsp · olives ~60 per 10
+- dates (deglet nour) ~60 per 3 · fruits (figue, grenade, melon, raisin, orange) use standard values
+
+=== PACKAGED PRODUCTS ===
+If a label or brand is visible (Dehia, Sama, Délice Danone, Natilait, Vikar, Bonna, Randa, Cielo, Moulin d'Or…), READ the printed values and use those instead of an estimate — and put the brand in the name.
+
+=== PORTION GUIDANCE (Tunisian plates are generous) ===
+bread slice = 60 g · bowl = 350-450 g (lablabi, chorba) · main plate = 350-400 g · brik/fricassé = 1 piece · couscous plate = 350 g · tablespoon of oil/harissa = 15-20 g.
+If a cooked Tunisian dish is visible, use the reference above instead of guessing generic values — and always give its LOCAL name (e.g. "Lablabi", "Kafteji", "Mloukhia"). Say if it is homemade or restaurant-style when visible (restaurant portions are bigger and oilier: +15-20%).
 
 Respond with ONLY a valid JSON object (no markdown, no code fences) in this exact shape:
 {
-  "dish": "short dish name, e.g. 'Grilled chicken & rice plate'",
+  "dish": "short dish name, e.g. 'Lablabi with a soft egg'",
   "description": "1-2 sentence description of the meal as pictured",
   "items": [
     {
       "name": "food name",
-      "portion": "estimated portion, e.g. '150 g' or '1 cup'",
+      "portion": "estimated portion, e.g. '1 bowl (450 g)'",
       "quantity": 1,
-      "calories": 165,
-      "protein": 31,
-      "carbs": 0,
-      "fat": 4,
+      "calories": 450,
+      "protein": 20,
+      "carbs": 68,
+      "fat": 18,
       "confidence": 0.92,
-      "detail": "what you actually see for this item: color, cooking method, visible ingredients (e.g. 'grilled chicken breast with char marks, ~150g')"
+      "detail": "what you actually see for this item: color, cooking method, visible ingredients"
     }
   ],
   "tips": "one short nutrition tip about this meal"
@@ -62,52 +103,7 @@ Rules:
 - confidence is 0..1.
 - quantity is how many servings the user likely ate (usually 1).
 - Identify every distinct visible food item, including oils/sauces you can infer.
-- If the image contains no food, return items: [] and explain in description.`
-
-function buildDemoResult(): ScanResponse {
-  return {
-    dish: "Estimation manuelle (IA indisponible)",
-    description:
-      "      L'analyse IA n'est pas encore activée (clé GEMINI_API_KEY / ANTHROPIC_API_KEY manquante côté serveur). Voici une estimation type — ajuste les quantités pour correspondre à ton assiette, puis ajoute. Ta photo n'est jamais stockée.",
-    items: [
-      {
-        name: "Poulet grillé (filet)",
-        portion: "150 g",
-        quantity: 1,
-        calories: 248,
-        protein: 47,
-        carbs: 0,
-        fat: 6,
-        confidence: 0.5,
-        detail: "estimation générique — ajuste la portion",
-      },
-      {
-        name: "Riz / couscous cuit",
-        portion: "1 tasse (160 g)",
-        quantity: 1,
-        calories: 205,
-        protein: 4,
-        carbs: 45,
-        fat: 1,
-        confidence: 0.4,
-        detail: "estimation générique — ajuste la portion",
-      },
-      {
-        name: "Salade mechouia",
-        portion: "1 bol",
-        quantity: 1,
-        calories: 95,
-        protein: 2,
-        carbs: 9,
-        fat: 6,
-        confidence: 0.4,
-        detail: "estimation générique — huile d'olive incluse",
-      },
-    ],
-    tips: "Astuce : ajoute seulement les aliments réellement dans ton assiette — supprime les autres avant de valider.",
-    source: "demo",
-  }
-}
+- If the image contains no food at all, return "items": [] and explain in description. NEVER invent a dish.`
 
 function extractJson(text: string): unknown {
   const cleaned = text.replace(/```json|```/g, "").trim()
@@ -162,28 +158,68 @@ async function geminiGenerate(geminiKey: string, model: string, body: unknown): 
 
 /**
  * Analyse vision via Google Gemini (AI Studio). Même contrat que le chemin
- * Anthropic : renvoie un ScanResponse, lève en cas d'erreur API.
+ * Anthropic : renvoie un ScanResponse, lève une ScanFailure (code + message
+ * utilisateur) en cas d'indisponibilité.
  */
+class ScanFailure extends Error {
+  code: ScanErrorCode
+  userMessage: string
+  status: number
+  constructor(code: ScanErrorCode, userMessage: string, status = 503) {
+    super(userMessage)
+    this.code = code
+    this.userMessage = userMessage
+    this.status = status
+  }
+}
+
+/** Traduit une erreur fournisseur (429 quota, 503 surcharge, timeout) en message clair. */
+function geminiFailure(status: number, detail: string, aborted: boolean): ScanFailure {
+  const raw = /"message"\s*:\s*"([^"]+)/.exec(detail)?.[1] ?? ""
+  if (aborted || /abort/i.test(raw)) {
+    return new ScanFailure("AI_TIMEOUT", "L'analyse a pris trop de temps — réessaie avec une photo plus légère.")
+  }
+  const quota = status === 429 || /quota|exceeded|rate limit|billing/i.test(raw)
+  if (quota) {
+    return new ScanFailure(
+      "AI_QUOTA",
+      "Le scanner est momentanément saturé (quota d'analyse atteint). Réessaie dans quelques minutes — ta photo est gardée sur ton appareil.",
+    )
+  }
+  if (status === 503 || /overloaded|unavailable|high demand/i.test(raw)) {
+    return new ScanFailure(
+      "AI_UNAVAILABLE",
+      "Le moteur d'analyse est surchargé à cet instant. Réessaie dans une minute.",
+      503,
+    )
+  }
+  return new ScanFailure(
+    "AI_UNAVAILABLE",
+    "Le scanner d'aliments est indisponible pour le moment. Réessaie plus tard ou saisis ton plat à la main.",
+    503,
+  )
+}
+
 async function scanWithGemini(geminiKey: string, mediaType: string, base64: string): Promise<ScanResponse> {
   const buildBody = () => ({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [
+    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { inline_data: { mime_type: mediaType, data: base64 } },
           {
-            role: "user",
-            parts: [
-              { inline_data: { mime_type: mediaType, data: base64 } },
-              {
-                text: "Identify every food in this meal photo with detailed per-item breakdowns. Reply with the JSON object only.",
-              },
-            ],
+            text: "Identify every food in this meal photo with detailed per-item breakdowns. Reply with the JSON object only.",
           },
         ],
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 1600,
-          responseMimeType: "application/json",
-          thinkingConfig: { thinkingBudget: 0 },
-        },
+      },
+    ],
+    generationConfig: {
+      temperature: 0.4,
+      maxOutputTokens: 1600,
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: 0 },
+    },
   })
 
   // Essaie le modèle principal, puis les fallbacks en cas de 503 (surcharge)
@@ -200,18 +236,21 @@ async function scanWithGemini(geminiKey: string, mediaType: string, base64: stri
   if (!res.ok) {
     const detail = await res.text().catch(() => "")
     console.error("gemini vision api error", res.status, detail.slice(0, 300))
-    const reason = /"message"\s*:\s*"([^"]+)"/.exec(detail)?.[1]
-    throw new Error(`AI service error (${res.status}${reason ? ": " + reason.slice(0, 120) : ""})`)
+    throw geminiFailure(res.status, detail, false)
   }
 
   const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
   const text = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("\n")
 
-  const parsed = extractJson(text) as {
-    dish?: string
-    description?: string
-    items?: unknown[]
-    tips?: string
+  let parsed: { dish?: string; description?: string; items?: unknown[]; tips?: string }
+  try {
+    parsed = extractJson(text) as typeof parsed
+  } catch {
+    // Réponse tronquée / non-JSON : on le dit (plutôt que d'inventer des plats).
+    throw new ScanFailure(
+      "AI_UNAVAILABLE",
+      "Le scanner n'a pas réussi à analyser cette photo. Reprends-la (assiette entière, bonne lumière) puis réessaie.",
+    )
   }
 
   const items = (Array.isArray(parsed.items) ? parsed.items : [])
@@ -219,8 +258,8 @@ async function scanWithGemini(geminiKey: string, mediaType: string, base64: stri
     .filter((x): x is DetectedFood => x !== null)
 
   if (items.length === 0) {
-    // Pas de nourriture reconnue : on répond SANS faux aliments (le résultat
-    // démo en contient) — juste le message clair pour l'utilisateur.
+    // Pas de nourriture reconnue : on répond SANS faux aliments — juste le
+    // message clair pour l'utilisateur.
     return {
       dish: typeof parsed.dish === "string" && parsed.dish ? parsed.dish : "No food detected",
       description:
@@ -230,7 +269,8 @@ async function scanWithGemini(geminiKey: string, mediaType: string, base64: stri
       items: [],
       tips: "",
       source: "ai",
-      error: "No food detected",
+      error: "NO_FOOD",
+      message: "No food detected",
     }
   }
 
@@ -247,9 +287,10 @@ export async function POST(request: Request) {
   // Abuse guard: vision calls are expensive
   const limit = rateLimit(`scan:${clientIp(request)}`, 10, 60 * 1000)
   if (!limit.ok) {
-    return Response.json(
-      { ...buildDemoResult(), error: "Too many scans — wait a minute." } satisfies ScanResponse,
-      { status: 429 },
+    return scanError(
+      "RATE_LIMIT",
+      "Trop de scans d'affilée — attends une minute et réessaie.",
+      429,
     )
   }
 
@@ -258,26 +299,18 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { image?: string }
     imageDataUrl = typeof body.image === "string" ? body.image : ""
   } catch {
-    return Response.json({ ...buildDemoResult(), error: "Invalid request body" } satisfies ScanResponse, {
-      status: 200,
-    })
+    return scanError("BAD_IMAGE", "Requête invalide — reprends la photo.", 400)
   }
 
   const match = /^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,(.+)$/.exec(imageDataUrl)
   if (!match) {
-    return Response.json(
-      { ...buildDemoResult(), error: "No valid image provided" } satisfies ScanResponse,
-      { status: 200 },
-    )
+    return scanError("BAD_IMAGE", "Aucune photo reçue — reprends la photo de ton plat.", 400)
   }
   const [, mediaType, base64] = match
 
   // Rough size guard (~4.5 MB base64 ≈ 3.4 MB binary, API limit is 5 MB)
   if (base64.length > 6_000_000) {
-    return Response.json(
-      { ...buildDemoResult(), error: "Image too large" } satisfies ScanResponse,
-      { status: 200 },
-    )
+    return scanError("BAD_IMAGE", "Photo trop lourde — reprends-la (elle est compressée automatiquement).", 413)
   }
 
   // Provider IA : Anthropic (Claude) en priorité, sinon Google Gemini.
@@ -297,19 +330,22 @@ export async function POST(request: Request) {
     try {
       return Response.json(await scanWithGemini(geminiKey, mediaType, base64), { status: 200 })
     } catch (err) {
+      if (err instanceof ScanFailure) {
+        console.error("scan-meal (gemini) failed:", err.code)
+        return scanError(err.code, err.userMessage, err.status)
+      }
       const message = err instanceof Error ? err.message : String(err)
       console.error("scan-meal (gemini) failed:", message)
-      return Response.json(
-        { ...buildDemoResult(), error: message.includes("abort") ? "AI request timed out" : message.slice(0, 160) } satisfies ScanResponse,
-        { status: 200 },
-      )
+      const failure = geminiFailure(0, message, /abort|timeout/i.test(message))
+      return scanError(failure.code, failure.userMessage, failure.status)
     }
   }
 
   if (looksFakeKey || usesProxy) {
-    return Response.json(
-      { ...buildDemoResult(), error: "Clé IA non configurée — ajoute GEMINI_API_KEY ou ANTHROPIC_API_KEY dans les variables Vercel." } satisfies ScanResponse,
-      { status: 200 },
+    return scanError(
+      "AI_UNAVAILABLE",
+      "Le scanner n'est pas configuré sur ce serveur (clé d'analyse manquante).",
+      503,
     )
   }
 
@@ -347,10 +383,8 @@ export async function POST(request: Request) {
     if (!res.ok) {
       const detail = await res.text().catch(() => "")
       console.error("vision api error", res.status, detail.slice(0, 300))
-      return Response.json(
-        { ...buildDemoResult(), error: `AI service error (${res.status})` } satisfies ScanResponse,
-        { status: 200 },
-      )
+      const failure = geminiFailure(res.status, detail, false)
+      return scanError(failure.code, failure.userMessage, failure.status)
     }
 
     const data = (await res.json()) as { content?: { type: string; text?: string }[] }
@@ -373,13 +407,16 @@ export async function POST(request: Request) {
     if (items.length === 0) {
       return Response.json(
         {
-          ...buildDemoResult(),
           dish: typeof parsed.dish === "string" ? parsed.dish : "No food detected",
           description:
             typeof parsed.description === "string" && parsed.description
               ? parsed.description
               : "The photo didn't contain any recognizable food. Try again with the plate fully in frame.",
-          error: "No food detected",
+          items: [],
+          tips: "",
+          source: "ai",
+          error: "NO_FOOD",
+          message: "No food detected",
         } satisfies ScanResponse,
         { status: 200 },
       )
@@ -396,9 +433,7 @@ export async function POST(request: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error("scan-meal failed:", message)
-    return Response.json(
-      { ...buildDemoResult(), error: message.includes("abort") ? "AI request timed out" : "AI request failed" } satisfies ScanResponse,
-      { status: 200 },
-    )
+    const failure = geminiFailure(0, message, /abort|timeout/i.test(message))
+    return scanError(failure.code, failure.userMessage, failure.status)
   }
 }

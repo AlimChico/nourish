@@ -203,7 +203,7 @@ export function BarcodeScannerScreen({
   }
 
   return (
-    <div className="safe-top fixed inset-0 z-50 flex flex-col bg-[#0b0f0d]/98 aurora-glow">
+    <div className="surface-dark safe-top fixed inset-0 z-50 flex flex-col bg-[#0b0f0d]/98 aurora-glow">
       {/* Header */}
       <header className="flex items-center justify-between px-5 pb-2 pt-4">
         <div>

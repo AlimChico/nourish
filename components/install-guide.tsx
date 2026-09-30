@@ -1,40 +1,30 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Share, MoreVertical, MonitorSmartphone, ChevronDown, PlusSquare, Check, Download, Laptop, Smartphone, Apple } from "lucide-react"
+import { Share, MoreVertical, MonitorSmartphone, ChevronDown, PlusSquare, Check, Download, Laptop, Apple } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ApkInstallCard } from "@/components/apk-install"
+import { detectPlatform, isNativeApp, isStandalone, type Platform } from "@/lib/platform"
 
 /**
  * "Install as an app" tutorial — shown in Profile.
  * Detects the visitor's platform and gives the exact tap-by-tap steps to add
  * Sahtek to the home screen (PWA). Collapses automatically once installed
  * (standalone display mode).
+ *
+ * Sur Android, la carte APK s'affiche au-dessus : le fichier d'installation est
+ * la vraie app (notifications natives, aucune limite de navigateur), la PWA
+ * reste proposée en dessous pour qui préfère ne rien télécharger.
  */
-
-type Platform = "ios" | "android" | "desktop"
-
-function detectPlatform(): Platform {
-  if (typeof navigator === "undefined") return "desktop"
-  const ua = navigator.userAgent
-  if (/iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && "ontouchend" in document)) return "ios"
-  if (/Android/.test(ua)) return "android"
-  return "desktop"
-}
-
-function isStandalone(): boolean {
-  if (typeof window === "undefined") return false
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (window.navigator as unknown as { standalone?: boolean }).standalone === true // iOS Safari
-  )
-}
 
 const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
   <li className="flex items-start gap-3">
     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-black text-primary-foreground">
       {n}
     </span>
-    <span className="text-sm leading-relaxed text-[#e6fff1]/85">{children}</span>
+    {/* `text-muted-foreground` et non du blanc en dur : cette carte vit sur
+        `bg-card`, qui devient clair en thème clair — du blanc y serait illisible. */}
+    <span className="text-sm leading-relaxed text-muted-foreground">{children}</span>
   </li>
 )
 
@@ -45,24 +35,35 @@ export function InstallGuide() {
 
   useEffect(() => {
     setPlatform(detectPlatform())
-    setInstalled(isStandalone())
+    // Dans l'APK, l'app EST déjà installée : proposer de l'« ajouter à l'écran
+    // d'accueil » n'aurait aucun sens. Seul l'iPhone et le navigateur affichent
+    // les étapes d'installation.
+    setInstalled(isStandalone() || isNativeApp())
   }, [])
+
+  // Ne rend rien du tout (ni sur iPhone, ni dans l'APK, ni sur ordinateur).
+  const apk = <ApkInstallCard />
 
   if (installed) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-[#a7f3d0]/15 bg-card p-4 shadow-sm">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 text-primary">
-          <Check className="h-5 w-5" strokeWidth={3} />
-        </span>
-        <p className="flex-1 text-sm font-semibold text-muted-foreground">
-          Sahtek est <span className="font-extrabold text-primary">installée</span> sur ton écran d&apos;accueil 🎉
-        </p>
+      <div className="flex flex-col gap-4">
+        {apk}
+        <div className="flex items-center gap-3 rounded-2xl border border-[#a7f3d0]/15 bg-card p-4 shadow-sm">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 text-primary">
+            <Check className="h-5 w-5" strokeWidth={3} />
+          </span>
+          <p className="flex-1 text-sm font-semibold text-muted-foreground">
+            Sahtek est <span className="font-extrabold text-primary">installée</span> sur ton écran d&apos;accueil 🎉
+          </p>
+        </div>
       </div>
     )
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[#a7f3d0]/15 bg-card shadow-sm">
+    <div className="flex flex-col gap-4">
+      {apk}
+      <section className="overflow-hidden rounded-2xl border border-[#a7f3d0]/15 bg-card shadow-sm">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -73,7 +74,9 @@ export function InstallGuide() {
           <MonitorSmartphone className="h-5 w-5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-extrabold">Installer Sahtek comme une app</span>
+          <span className="block text-sm font-extrabold">
+            {platform === "android" ? "Version web — sans rien télécharger" : "Installer Sahtek comme une app"}
+          </span>
           <span className="block text-xs text-muted-foreground">
             {platform === "ios" ? "Sur ton iPhone — 4 taps" : platform === "android" ? "Sur ton Android — 3 taps" : "Sur ton ordinateur — 2 clics"}
             {" · hors-ligne, plein écran, icône"}
@@ -147,6 +150,7 @@ export function InstallGuide() {
           </button>
         </div>
       )}
-    </section>
+      </section>
+    </div>
   )
 }

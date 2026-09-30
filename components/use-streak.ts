@@ -3,6 +3,7 @@
 import { useMemo } from "react"
 import { useFoodLog } from "@/lib/food-log"
 import { useHealth } from "@/lib/health"
+import { shiftDateKey } from "@/lib/date-key"
 
 /**
  * Daily streak = consecutive days (ending today or yesterday) with at least
@@ -21,9 +22,7 @@ export function useStreak(): number {
     let cursor = hasTodayActivity ? 0 : 1
     let count = 0
     for (; cursor < 365; cursor++) {
-      const d = new Date(`${state.date}T12:00:00`)
-      d.setDate(d.getDate() - cursor)
-      const iso = d.toISOString().slice(0, 10)
+      const iso = shiftDateKey(state.date, -cursor)
 
       if (iso === state.date) {
         count++

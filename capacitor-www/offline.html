@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0f0d" />
+    <title>Sahtek — hors ligne</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0f0d;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 32px 24px calc(32px + env(safe-area-inset-bottom, 0px));
+        box-sizing: border-box;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #f2faf6;
+        text-align: center;
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        margin-bottom: 12px;
+        border-radius: 20px;
+        background: linear-gradient(160deg, #34d399, #0f766e);
+        color: #0b0f0d;
+        font-size: 30px;
+        font-weight: 800;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0;
+      }
+      p {
+        margin: 0;
+        color: #9fb3a9;
+        font-size: 14px;
+        line-height: 1.55;
+        max-width: 320px;
+      }
+      button {
+        margin-top: 20px;
+        font: inherit;
+        font-weight: 700;
+        padding: 13px 28px;
+        border: 0;
+        border-radius: 999px;
+        background: #1f8a5b;
+        color: #ffffff;
+        transition: transform 0.12s ease;
+      }
+      button:active {
+        transform: scale(0.96);
+      }
+      #state {
+        min-height: 18px;
+        margin-top: 10px;
+        font-size: 12px;
+        color: #6f8579;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Page de secours locale (server.errorPath dans capacitor.config.ts).
+
+      Elle n'est affichée QUE si le WebView n'arrive pas à joindre l'URL de
+      production — donc au tout premier lancement hors ligne, avant que le
+      service worker ait mémorisé l'app. Une fois l'app chargée une seule fois,
+      le service worker prend le relais et cette page n'apparaît plus jamais :
+      l'app s'ouvre alors normalement, sans réseau.
+
+      Elle ne peut PAS utiliser les plugins Capacitor (Android ne les injecte
+      pas dans errorPath) : le bouton navigue donc en HTML/JS pur.
+    -->
+    <div class="logo">S</div>
+    <h1>Pas de connexion</h1>
+    <p>
+      Sahtek n'a pas pu joindre son serveur. Tes données restent enregistrées sur ton téléphone.<br />
+      Réessaie dès que le réseau revient.
+    </p>
+    <button type="button" id="retry">Réessayer</button>
+    <p id="state"></p>
+
+    <script>
+      // Doit rester identique à server.url (capacitor.config.ts).
+      var APP_URL = "https://nourish-roan.vercel.app/";
+      var state = document.getElementById("state");
+      var attempts = 0;
+
+      function open() {
+        location.replace(APP_URL);
+      }
+
+      document.getElementById("retry").addEventListener("click", open);
+
+      // Retour du réseau : on relance immédiatement l'app.
+      window.addEventListener("online", open);
+
+      // Tentatives espacées puis abandon : relancer en boucle ferait clignoter
+      // cet écran sans jamais aboutir quand onLine ment (portail captif, DNS HS).
+      var delays = [3000, 8000, 20000];
+      (function tick() {
+        if (attempts >= delays.length) {
+          state.textContent = "Toujours pas de connexion — appuie sur Réessayer.";
+          return;
+        }
+        var wait = delays[attempts++];
+        setTimeout(function () {
+          if (navigator.onLine) {
+            state.textContent = "Nouvelle tentative…";
+            open();
+            return;
+          }
+          tick();
+        }, wait);
+      })();
+    </script>
+  </body>
+</html>

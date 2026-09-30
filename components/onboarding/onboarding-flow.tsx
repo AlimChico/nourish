@@ -156,6 +156,7 @@ export function OnboardingFlow() {
     notifications: true,
     digestEnabled: true,
     digestHour: 20,
+    mealReminders: { breakfast: 9, lunch: 14, dinner: 21 },
     diet,
     allergies: selectedAllergies,
   })

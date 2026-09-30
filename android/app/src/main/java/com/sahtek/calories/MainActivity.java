@@ -1,0 +1,5 @@
+package com.sahtek.calories;
+
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {}

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0f0d" />
+    <title>Sahtek</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0f0d;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        box-sizing: border-box;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #f2faf6;
+        text-align: center;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 8px;
+      }
+      p {
+        margin: 0 0 20px;
+        color: #9fb3a9;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      button {
+        font: inherit;
+        font-weight: 600;
+        padding: 12px 20px;
+        border: 0;
+        border-radius: 999px;
+        background: #1f8a5b;
+        color: #ffffff;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Page de secours locale, jamais affichée en usage normal : l'application
+      est chargée depuis son URL de production (voir server.url dans
+      capacitor.config.ts). Elle sert uniquement de `webDir` à la CLI Capacitor
+      et de filet de sécurité si le WebView échoue à joindre le serveur.
+    -->
+    <main>
+      <h1>Sahtek</h1>
+      <p>Impossible de charger l'application.<br />Vérifie ta connexion internet.</p>
+      <button type="button" onclick="location.replace('https://nourish-roan.vercel.app')">
+        Réessayer
+      </button>
+    </main>
+  </body>
+</html>

@@ -45,6 +45,43 @@ export async function api<T>(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Dernière identité connue — la session doit survivre à une coupure réseau.
+// ---------------------------------------------------------------------------
+
+const SESSION_HINT_KEY = "sahtek.session-hint.v1"
+
+/**
+ * `GET /api/auth/me` échoue hors ligne (statut HTTP 0) — ce n'est PAS la même
+ * chose qu'une absence de session (401). Sans cette distinction, ouvrir l'APK
+ * sans réseau faisait passer l'utilisateur pour déconnecté : l'historique
+ * serveur et le classement disparaissaient, et surtout `useCloudPush` refusait
+ * de pousser quoi que ce soit. Les repas loggés pendant la coupure
+ * n'atteignaient alors JAMAIS le serveur, même après le retour du réseau.
+ *
+ * Cet indice n'est qu'un état d'affichage : il ne donne aucun droit. Chaque
+ * appel API reste autorisé (ou refusé) par le serveur via le cookie de session.
+ */
+function readSessionHint(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(SESSION_HINT_KEY)
+    if (!raw) return null
+    const u = JSON.parse(raw) as AuthUser
+    return u && typeof u.id === "string" && typeof u.email === "string" ? u : null
+  } catch {
+    return null
+  }
+}
+
+function writeSessionHint(user: AuthUser | null): void {
+  try {
+    if (user) localStorage.setItem(SESSION_HINT_KEY, JSON.stringify(user))
+    else localStorage.removeItem(SESSION_HINT_KEY)
+  } catch {
+    // stockage indisponible
+  }
+}
+
 // Push failures are surfaced through the provider via a module-level listener.
 let pushErrorListener: ((msg: string | null) => void) | null = null
 
@@ -62,23 +99,53 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  /**
+   * Interroge la session. Seule une réponse FERME du serveur fait basculer
+   * l'app en « non connecté » : un échec réseau (statut 0) laisse l'état en
+   * place, car il ne prouve rien sur la validité de la session.
+   */
+  const checkAuth = useCallback(async () => {
+    const { data, status: httpStatus } = await api<{ user: AuthUser | null }>("/api/auth/me")
+    if (data?.user) {
+      writeSessionHint(data.user)
+      setUser(data.user)
+      setStatus("authed")
+      return
+    }
+    if (httpStatus === 0) return
+    // 200 sans utilisateur ou 401 : le serveur a répondu, la session est close.
+    writeSessionHint(null)
+    setUser(null)
+    setStatus("anon")
+  }, [])
+
   // Who am I? (page load)
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      const { data } = await api<{ user: AuthUser | null }>("/api/auth/me")
-      if (cancelled) return
-      if (data?.user) {
-        setUser(data.user)
-        setStatus("authed")
-      } else {
-        setStatus("anon")
-      }
-    })()
-    return () => {
-      cancelled = true
+    // L'identité mémorisée s'affiche immédiatement : sans elle, l'app se
+    // présentait comme déconnectée le temps de la requête, et pour toute la
+    // session en cas de coupure réseau.
+    const hinted = readSessionHint()
+    if (hinted) {
+      setUser(hinted)
+      setStatus("authed")
     }
-  }, [])
+    void checkAuth()
+  }, [checkAuth])
+
+  // Retour du réseau / retour de l'app au premier plan : on revérifie la
+  // session, sinon un démarrage hors ligne laissait l'app « déconnectée »
+  // jusqu'au prochain rechargement complet.
+  useEffect(() => {
+    const recheck = () => {
+      if (document.visibilityState === "visible") void checkAuth()
+    }
+    window.addEventListener("online", recheck)
+    document.addEventListener("visibilitychange", recheck)
+    return () => {
+      window.removeEventListener("online", recheck)
+      document.removeEventListener("visibilitychange", recheck)
+    }
+  }, [checkAuth])
 
   // Pull the cloud account when a session appears (login/signup on this browser).
   useEffect(() => {
@@ -99,6 +166,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ name, email, password }),
     })
     if (!r.ok || !r.data?.user) return { ok: false, error: r.error ?? "Signup failed" }
+    writeSessionHint(r.data.user)
     setUser(r.data.user)
     setStatus("authed")
     return { ok: true }
@@ -110,6 +178,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ email, password }),
     })
     if (!r.ok || !r.data?.user) return { ok: false, error: r.error ?? "Login failed" }
+    writeSessionHint(r.data.user)
     setUser(r.data.user)
     setStatus("authed")
     return { ok: true }
@@ -117,10 +186,16 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     await api("/api/auth/logout", { method: "POST" })
+    writeSessionHint(null)
     setUser(null)
     setStatus("anon")
     setRestoredAccount(null)
     setSyncError(null)
+    pendingFailure = false
+    lastPayloads.account = undefined
+    lastPayloads.day = undefined
+    lastPayloads.health = undefined
+    lastPayloads.weight = undefined
   }, [])
 
   const consumeRestoredAccount = useCallback(() => setRestoredAccount(null), [])
@@ -143,15 +218,56 @@ export function useSync(): SyncStore {
 // Push — debounced PUT of one store snapshot. Safe no-op when logged out.
 // ---------------------------------------------------------------------------
 
-export function pushSnapshot(kind: "account" | "day" | "health", payload: unknown): void {
-  const body = kind === "account" ? { account: payload } : kind === "day" ? { day: payload } : { health: payload }
+export type SyncKind = "account" | "day" | "health" | "weight"
+
+function bodyFor(kind: SyncKind, payload: unknown): string {
+  switch (kind) {
+    case "account":
+      return JSON.stringify({ account: payload })
+    case "day":
+      return JSON.stringify({ day: payload })
+    case "health":
+      return JSON.stringify({ health: payload })
+    case "weight":
+      return JSON.stringify({ weight: payload })
+  }
+}
+
+export function pushSnapshot(kind: SyncKind, payload: unknown): void {
+  // Dernier état connu de chaque store : permet de TOUT re-pousser d'un coup
+  // après une coupure réseau (bouton « Réessayer » du bandeau de synchro).
+  lastPayloads[kind] = payload
+  const body = bodyFor(kind, payload)
   void api(`/api/sync/${kind}`, { method: "PUT", body: JSON.stringify(body) }).then((r) => {
-    if (!r.ok && r.status !== 401) pushErrorListener?.("Sync failed — data kept locally")
+    if (!r.ok && r.status !== 401) {
+      pendingFailure = true
+      pushErrorListener?.("sync_failed")
+    } else if (r.ok) {
+      pendingFailure = false
+      pushErrorListener?.(null)
+    }
   })
 }
 
+const lastPayloads: Partial<Record<SyncKind, unknown>> = {}
+let pendingFailure = false
+
+/** Le nuage n'a pas la dernière version locale (hors-ligne, serveur en erreur…). */
+export function hasPendingSync(): boolean {
+  return pendingFailure
+}
+
+/** Re-pousse tous les stores connus — utilisé par le bouton « Réessayer ». */
+export function retryAllPushes(): void {
+  const kinds: SyncKind[] = ["account", "day", "health", "weight"]
+  for (const kind of kinds) {
+    const payload = lastPayloads[kind]
+    if (payload !== undefined) pushSnapshot(kind, payload)
+  }
+}
+
 /** Debounced mirror of one store to the server while authed. */
-export function useCloudPush<T>(kind: "account" | "day" | "health", payload: T, opts: { authed: boolean; enabled?: boolean }) {
+export function useCloudPush<T>(kind: SyncKind, payload: T, opts: { authed: boolean; enabled?: boolean }) {
   const { authed, enabled = true } = opts
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latest = useRef(payload)

@@ -27,12 +27,29 @@ import { cn } from "@/lib/utils"
 
 type OffResult = FoodItem & { _off?: boolean }
 
-export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => void; onOpenBarcode: () => void }) {
+export function FoodScreen({
+  onOpenScan,
+  onOpenBarcode,
+  initialMeal,
+}: {
+  onOpenScan: () => void
+  onOpenBarcode: () => void
+  /** Repas pré-sélectionné quand on arrive depuis le "+" d'un repas du dashboard. */
+  initialMeal?: MealKey
+}) {
   const { state, addFood } = useFoodLog()
   const [query, setQuery] = useState("")
   const [pending, setPending] = useState<FoodItem[]>([])
-  const [meal, setMeal] = useState<MealKey>(targetForTime)
+  const [meal, setMeal] = useState<MealKey>(initialMeal ?? targetForTime)
+  // Le "+" d'un repas du dashboard cible CE repas, même si l'onglet Food est
+  // déjà monté (changement d'onglet sans remontage).
+  useEffect(() => {
+    if (initialMeal) setMeal(initialMeal)
+  }, [initialMeal])
   const [customTick, setCustomTick] = useState(0) // re-render after custom food mutations
+  // Liste complète des spécialités tunisiennes (75 plats/boissons/douceurs) :
+  // accessible en un tap depuis la tuile 🇹🇳 ou le bouton « Voir tout ».
+  const [tnMode, setTnMode] = useState(false)
   const [showCreator, setShowCreator] = useState(false)
   const [reqName, setReqName] = useState("")
   const [reqNote, setReqNote] = useState("")
@@ -101,7 +118,7 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
   }
 
   return (
-    <div className="aurora-glow mx-auto flex w-full flex-col gap-6 px-5 pb-40 pt-2 sm:px-6">
+    <div className="mx-auto flex w-full flex-col gap-6 px-5 pb-40 pt-2 sm:px-6">
       <header>
         <h1 className="text-2xl font-extrabold tracking-tight">Add food</h1>
         <p className="text-sm text-muted-foreground">Millions of foods worldwide + your own recipes.</p>
@@ -132,7 +149,55 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
         </button>
       </div>
 
-      {results.length > 0 || offResults.length > 0 ? (
+      {/* Choix du repas — visible AVANT de choisir les aliments (plus de
+          destination surprise au moment de valider). */}
+      <section>
+        <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">Log to</h2>
+        <div className="grid grid-cols-4 gap-2">
+          {(Object.keys(mealMeta) as MealKey[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setMeal(key)}
+              aria-pressed={meal === key}
+              className={cn(
+                "flex flex-col items-center gap-0.5 rounded-2xl border py-2 text-[11px] font-bold transition-all active:scale-95",
+                meal === key
+                  ? "border-primary bg-primary/15 text-foreground"
+                  : "border-border bg-card text-muted-foreground",
+              )}
+            >
+              <span className="text-lg">{mealMeta[key].emoji}</span>
+              {mealMeta[key].name}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {tnMode && query.trim().length === 0 ? (
+        <section className="animate-fade-in">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <SectionTitleInline icon={<span className="text-base">🇹🇳</span>}>
+              Spécialités tunisiennes ({tunisianFoods.length})
+            </SectionTitleInline>
+            <button
+              type="button"
+              onClick={() => setTnMode(false)}
+              className="shrink-0 rounded-xl bg-muted px-3 py-1.5 text-xs font-bold text-muted-foreground active:scale-95"
+            >
+              Fermer
+            </button>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Plats, street food, douceurs et boissons — avec des portions tunisiennes réalistes.
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+            {tunisianFoods.map((f) => (
+              <TunisianCard key={f.id} food={f} added={pending.some((p) => p.id === f.id)} onToggle={() => queue(f)} />
+            ))}
+          </div>
+        </section>
+      ) : results.length > 0 || offResults.length > 0 ? (
         <section className="animate-fade-in">
           <SectionTitle>Results</SectionTitle>
           <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:items-start sm:gap-3">
@@ -150,6 +215,17 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
           <section className="animate-fade-in">
             <SectionTitle>Categories</SectionTitle>
             <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-8">
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("")
+                  setTnMode(true)
+                }}
+                className="flex flex-col items-center gap-1.5 rounded-2xl border border-primary/40 bg-primary/10 p-3 shadow-sm transition-transform active:scale-95"
+              >
+                <span className="text-2xl">🇹🇳</span>
+                <span className="text-[11px] font-bold text-primary">Tunisien</span>
+              </button>
               {foodCategories.map((c) => (
                 <button
                   key={c.id}
@@ -279,11 +355,24 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
             )}
           </section>
 
-          {/* Tunisian specialties */}
+          {/* Tunisian specialties — 8 mises en avant, ou la liste complète */}
           <section className="animate-fade-in">
-            <SectionTitle icon={<span className="text-base">🇹🇳</span>}>Spécialités tunisiennes</SectionTitle>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-              {tunisianFoods.slice(0, 8).map((f) => (
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <SectionTitleInline icon={<span className="text-base">🇹🇳</span>}>
+                {tnMode ? `Spécialités tunisiennes (${tunisianFoods.length})` : "Spécialités tunisiennes"}
+              </SectionTitleInline>
+              <button
+                type="button"
+                onClick={() => setTnMode((v) => !v)}
+                className="shrink-0 rounded-xl bg-accent px-3 py-1.5 text-xs font-bold text-primary active:scale-95"
+              >
+                {tnMode ? "Voir moins" : `Voir tout (${tunisianFoods.length})`}
+              </button>
+            </div>
+            {/* Une seule colonne sur téléphone : les noms tunisiens sont longs
+                (« Couscous au poulet ») et doivent rester lisibles en entier. */}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+              {(tnMode ? tunisianFoods : tunisianFoods.slice(0, 8)).map((f) => (
                 <TunisianCard key={f.id} food={f} added={pending.some((p) => p.id === f.id)} onToggle={() => queue(f)} />
               ))}
             </div>
@@ -315,22 +404,9 @@ export function FoodScreen({ onOpenScan, onOpenBarcode }: { onOpenScan: () => vo
       {pending.length > 0 && (
         <div className="sticky bottom-3 z-20 mx-auto flex w-full max-w-[600px] justify-center px-1">
           <div className="w-full rounded-3xl bg-secondary p-3 text-secondary-foreground shadow-2xl">
-            <div className="mb-2 grid grid-cols-4 gap-2">
-              {(Object.keys(mealMeta) as MealKey[]).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setMeal(key)}
-                  className={cn(
-                    "flex flex-col items-center gap-0.5 rounded-xl border py-1.5 text-[10px] font-bold transition-all",
-                    meal === key ? "border-primary bg-primary/20 text-[#e6fff1]" : "border-[#a7f3d0]/10 bg-[#a7f3d0]/5 text-[#e6fff1]/60",
-                  )}
-                >
-                  <span className="text-base">{mealMeta[key].emoji}</span>
-                  {mealMeta[key].name}
-                </button>
-              ))}
-            </div>
+            <p className="mb-2 text-center text-[11px] font-bold text-[#e6fff1]/70">
+              {mealMeta[meal].emoji} Adding to {mealMeta[meal].name}
+            </p>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -489,8 +565,10 @@ function TunisianCard({ food, added, onToggle }: { food: FoodItem; added: boolea
     <div className="animate-fade-in flex items-center gap-2 rounded-2xl bg-card p-3 shadow-sm">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-xl">{food.emoji}</span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold">{food.name}</p>
-        <p className="text-[11px] text-muted-foreground">{food.calories} kcal · P{food.protein} C{food.carbs} F{food.fat}</p>
+        <p className="text-sm font-bold leading-tight">{food.name}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {food.serving} · {food.calories} kcal · P{food.protein} C{food.carbs} F{food.fat}
+        </p>
       </div>
       <button
         type="button"

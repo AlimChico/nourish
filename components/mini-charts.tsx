@@ -14,11 +14,13 @@ export function BarChart({ data, max, className, barClassName = "bg-primary", un
   const peak = max ?? Math.max(...data.map((d) => d.value)) * 1.1
 
   return (
-    <div className={cn("flex items-end justify-between gap-2", className)}>
-      {data.map((d) => {
+    <div className={cn("flex items-end justify-between gap-1 sm:gap-2", className)}>
+      {data.map((d, i) => {
         const h = Math.max((d.value / peak) * 100, 4)
         return (
-          <div key={d.day} className="flex flex-1 flex-col items-center gap-2">
+          // Clé composite : sur 14 jours les libellés de jour se répètent (« Tue »
+          // revient deux fois) — l'index garantit l'unicité des clés React.
+          <div key={`${d.day}-${i}`} className="flex min-w-0 flex-1 flex-col items-center gap-2">
             <div className="relative flex h-[clamp(6rem,22vw,9rem)] w-full items-end justify-center">
               {d.target ? (
                 <div
@@ -31,7 +33,9 @@ export function BarChart({ data, max, className, barClassName = "bg-primary", un
                 style={{ height: `${h}%` }}
               />
             </div>
-            <span className="text-xs font-medium text-muted-foreground">{d.day}</span>
+            <span className="w-full truncate text-center text-[10px] font-medium text-muted-foreground sm:text-xs">
+              {d.day}
+            </span>
           </div>
         )
       })}
@@ -82,8 +86,9 @@ export function LineChart({ data, className, stroke = "var(--primary)", fill = "
         ))}
       </svg>
       <div className="mt-2 flex justify-between px-1">
-        {data.map((d) => (
-          <span key={d.label} className="text-[10px] font-medium text-muted-foreground">
+        {/* Clé composite : les libellés peuvent se répéter (jours, poids…) */}
+        {data.map((d, i) => (
+          <span key={`${d.label}-${i}`} className="max-w-[3.5rem] truncate text-[10px] font-medium text-muted-foreground">
             {d.label}
           </span>
         ))}

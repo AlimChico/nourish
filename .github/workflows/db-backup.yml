@@ -1,0 +1,52 @@
+name: Sauvegarde base de données
+
+# Sauvegarde NOCTURNE de la base Postgres (Supabase) : un dump SQL complet,
+# conservé 30 jours comme artefact GitHub. C'est le filet de sécurité réel
+# (restauration à l'octet près), là où /api/backup sert d'export JSON rapide.
+#
+# Activation (une seule fois) : ajouter le secret de dépôt DATABASE_URL
+#   GitHub → Settings → Secrets and variables → Actions → New repository secret
+#   Nom : DATABASE_URL   Valeur : la même URL que dans Vercel (.env.local).
+# Sans ce secret, le workflow se termine sans erreur (il ne fait rien).
+
+on:
+  schedule:
+    - cron: "30 2 * * *" # 02:30 UTC = 03:30 en Tunisie
+  workflow_dispatch: {}
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier la présence du secret
+        id: check
+        run: |
+          if [ -n "${{ secrets.DATABASE_URL }}" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::DATABASE_URL absent — sauvegarde ignorée. Ajoutez le secret du dépôt pour l'activer."
+          fi
+
+      - name: Installer le client PostgreSQL
+        if: steps.check.outputs.ok == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: Dump complet
+        if: steps.check.outputs.ok == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          STAMP=$(date -u +%Y-%m-%d_%H%M)
+          pg_dump --no-owner --no-privileges --format=custom \
+            --file="sahtek-$STAMP.dump" "$DATABASE_URL"
+          gzip -9 "sahtek-$STAMP.dump"
+          ls -lh sahtek-*.dump.gz
+
+      - name: Conserver la sauvegarde (30 jours)
+        if: steps.check.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sahtek-db-dump
+          path: sahtek-*.dump.gz
+          retention-days: 30

@@ -14,6 +14,7 @@ import { useSync, useCloudPush } from "@/lib/sync"
 export { DEFAULT_ACCOUNT, normalizeAccount }
 export type { AccountState, OnboardingData }
 export type { Gender, Goal, Units, Diet } from "@/lib/account-schema"
+export type { MealReminderKey, MealReminders } from "@/lib/account-schema"
 
 const STORAGE_KEY = "nourish.account.v1"
 

@@ -1,7 +1,8 @@
 "use client"
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
-import { useSync, api } from "@/lib/sync"
+import { useSync, api, useCloudPush } from "@/lib/sync"
+import { appDateKey } from "@/lib/date-key"
 
 export type WeightEntry = { date: string; kg: number }
 
@@ -51,14 +52,10 @@ export function WeightProvider({ children }: { children: React.ReactNode }) {
     }
   }, [entries, hydrated])
 
-  // Cloud push (debounced) while logged in.
-  useEffect(() => {
-    if (!hydrated || status !== "authed") return
-    const t = setTimeout(() => {
-      void api("/api/sync/weight", { method: "PUT", body: JSON.stringify({ weight: entries }) })
-    }, 1200)
-    return () => clearTimeout(t)
-  }, [entries, hydrated, status])
+  // Cloud push (debounced) while logged in. Passe par la couche de synchro
+  // commune (et non un fetch isolé) pour que le poids saisi hors ligne soit
+  // re-poussé automatiquement au retour du réseau, comme le journal et l'eau.
+  useCloudPush("weight", entries, { authed: status === "authed", enabled: hydrated })
 
   // Cloud pull when a session appears (login on this browser).
   useEffect(() => {
@@ -89,7 +86,7 @@ export function WeightProvider({ children }: { children: React.ReactNode }) {
       latest: entries[0] ?? null,
       addWeight: (kg, date) =>
         setEntries((list) => {
-          const d = date ?? new Date().toISOString().slice(0, 10)
+          const d = date ?? appDateKey()
           const filtered = list.filter((e) => e.date !== d)
           return [{ date: d, kg: Math.min(400, Math.max(25, Math.round(kg * 10) / 10)) }, ...filtered].sort((a, b) => b.date.localeCompare(a.date))
         }),

@@ -34,3 +34,21 @@ pnpm-workspace.yaml
 # Local env (never commit)
 .env
 .env.local
+
+# Capacitor / Android — le projet natif est versionné, pas ses artefacts
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/.cxx/
+*.apk
+*.aab
+*.keystore
+# Exception volontaire : l'APK publié aux utilisateurs est servi par le site
+# (`/downloads/sahtek.apk`), donc il doit être versionné pour être déployé.
+!public/downloads/*.apk
+# Copie générée par `npx cap sync` à partir de webDir
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json

@@ -13,6 +13,7 @@ import {
 } from "@/lib/workout-generator"
 import { useFoodLog } from "@/lib/food-log"
 import { cn } from "@/lib/utils"
+import { appDateKey } from "@/lib/date-key"
 
 const MUSCLES: MuscleKey[] = ["chest", "back", "shoulders", "arms", "legs", "glutes", "core", "full"]
 const DIFFICULTIES: Difficulty[] = ["beginner", "intermediate", "advanced"]
@@ -28,7 +29,7 @@ export function WorkoutScreen() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
-      const iso = d.toISOString().slice(0, 10)
+      const iso = appDateKey(d)
       out.push({ day: names[d.getDay()], value: state.days[iso]?.workoutMinutes ?? 0 })
     }
     return out
@@ -74,7 +75,7 @@ export function WorkoutScreen() {
   const allDone = workout ? doneBlocks.size === workout.blocks.length : false
 
   return (
-    <div className="aurora-glow mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:px-6">
+    <div className="mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:px-6">
       <header>
         <h1 className="text-2xl font-extrabold tracking-tight">Workouts</h1>
         <p className="text-sm text-muted-foreground">Move more, feel stronger.</p>

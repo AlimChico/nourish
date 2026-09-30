@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react"
 import { useSync, useCloudPush } from "@/lib/sync"
+import { appDateKey } from "@/lib/date-key"
+import { archiveFromLog } from "@/lib/day-archive"
 
 export type MacroKey = "protein" | "carbs" | "fat"
 
@@ -15,6 +17,15 @@ export type FoodItem = {
   carbs: number
   fat: number
   emoji: string
+  /**
+   * Miniature de la photo scannée (data-URL JPEG ~256px, < 90 Ko) : la photo
+   * reste sur le dashboard après l'enregistrement du plat. Volontairement
+   * bornée (voir `MAX_PHOTO_CHARS`) pour ne jamais saturer localStorage ni le
+   * payload de synchro.
+   */
+  photo?: string
+  /** Vrai si l'entrée vient du scanner photo (badge « Scanned » sur le dashboard). */
+  scanned?: boolean
 }
 
 export type MealKey = "breakfast" | "lunch" | "dinner" | "snacks"
@@ -39,6 +50,12 @@ export type DayHistory = {
   carbs: number
   fat: number
   water: number
+  /**
+   * Nombre d'aliments enregistrés ce jour-là — base du calcul d'XP (barème
+   * plafonné par jour). Absent sur les journées archivées avant l'ajout de
+   * l'XP : elles sont alors comptées comme une journée complète.
+   */
+  entries?: number
 }
 
 export type LogState = {
@@ -57,8 +74,9 @@ export const mealMeta: Record<MealKey, { name: string; emoji: string }> = {
 
 export const mealOrder: MealKey[] = ["breakfast", "lunch", "dinner", "snacks"]
 
+/** Clé de jour du journal — fuseau tunisien (voir `lib/date-key.ts`). */
 export function todayKey(now = new Date()): string {
-  return now.toISOString().slice(0, 10)
+  return appDateKey(now)
 }
 
 function makeId(prefix: string): string {
@@ -72,6 +90,15 @@ function emptyState(): LogState {
   return { date: todayKey(), meals: { breakfast: [], lunch: [], dinner: [], snacks: [] }, water: 0, history: [] }
 }
 
+/** Garde-fou taille : au-delà, la miniature est ignorée (payload de synchro sain). */
+export const MAX_PHOTO_CHARS = 120_000
+
+function cleanPhoto(raw: unknown): string | undefined {
+  return typeof raw === "string" && raw.startsWith("data:image/") && raw.length <= MAX_PHOTO_CHARS
+    ? raw
+    : undefined
+}
+
 function normalize(state: unknown): LogState {
   const base = emptyState()
   if (!state || typeof state !== "object") return base
@@ -83,18 +110,32 @@ function normalize(state: unknown): LogState {
       meals[key] = arr.filter(
         (e): e is MealEntry => !!e && typeof e === "object" && !!e.food && typeof e.entryId === "string",
       )
-        .map((e) => ({ ...e, loggedAt: typeof e.loggedAt === "number" ? e.loggedAt : undefined }))
+        .map((e) => ({
+          ...e,
+          loggedAt: typeof e.loggedAt === "number" ? e.loggedAt : undefined,
+          // La photo survit au rechargement / au pull cloud, mais jamais dans
+          // une taille abusive (corruption ou ancien format).
+          food: { ...e.food, photo: cleanPhoto(e.food.photo) },
+        }))
     }
   }
-  const history = Array.isArray(s.history)
-    ? s.history.filter(
-        (h): h is DayHistory =>
-          !!h &&
-          typeof h === "object" &&
-          typeof h.date === "string" &&
-          /^\d{4}-\d{2}-\d{2}$/.test(h.date) &&
-          typeof h.calories === "number",
-      )
+  const history: DayHistory[] = Array.isArray(s.history)
+    ? s.history
+        .filter(
+          (h): h is DayHistory =>
+            !!h &&
+            typeof h === "object" &&
+            typeof h.date === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/.test(h.date) &&
+            typeof h.calories === "number",
+        )
+        .map((h) => ({
+          ...h,
+          entries:
+            typeof h.entries === "number" && isFinite(h.entries)
+              ? Math.max(0, Math.min(200, Math.round(h.entries)))
+              : undefined,
+        }))
     : []
   return {
     date: typeof s.date === "string" ? s.date : base.date,
@@ -110,7 +151,8 @@ type Action =
   | { type: "add"; meal: MealKey; food: FoodItem; quantity?: number }
   | { type: "remove"; meal: MealKey; entryId: string }
   | { type: "setQuantity"; meal: MealKey; entryId: string; quantity: number }
-  | { type: "water"; delta: number }
+  | { type: "move"; from: MealKey; entryId: string; to: MealKey }
+  | { type: "water"; delta: number; max?: number }
   | { type: "reset" }
 
 function reducer(state: LogState, action: Action): LogState {
@@ -148,8 +190,28 @@ function reducer(state: LogState, action: Action): LogState {
           ),
         },
       }
+    case "move": {
+      // Déplacer un aliment déjà loggé vers un autre repas (erreur de saisie
+      // fréquente : on ne force pas l'utilisateur à supprimer puis re-chercher).
+      if (action.from === action.to) return state
+      const moved = state.meals[action.from].find((e) => e.entryId === action.entryId)
+      if (!moved) return state
+      return {
+        ...state,
+        meals: {
+          ...state.meals,
+          [action.from]: state.meals[action.from].filter((e) => e.entryId !== action.entryId),
+          [action.to]: [...state.meals[action.to], moved],
+        },
+      }
+    }
     case "water":
-      return { ...state, water: Math.max(0, state.water + action.delta) }
+      // Bornes strictes : jamais < 0, jamais au-delà de l'objectif du jour
+      // (l'objectif est transmis par l'appelant ; MAX_WATER reste le garde-fou).
+      return {
+        ...state,
+        water: Math.max(0, Math.min(action.max ?? MAX_WATER, state.water + action.delta)),
+      }
     case "reset":
       return rollover(state)
   }
@@ -197,6 +259,8 @@ function rollover(state: LogState): LogState {
     carbs: Math.round(totals.carbs),
     fat: Math.round(totals.fat),
     water: state.water,
+    // Compté AUJOURD'HUI, avant remise à zéro : sert au barème d'XP.
+    entries: mealOrder.reduce((n, k) => n + state.meals[k].length, 0),
   }
   const history = [entry, ...state.history.filter((h) => h.date !== state.date)]
     .filter((h) => hasAnyFood || h.water > 0 || h.calories > 0 || h.date !== state.date)
@@ -216,7 +280,8 @@ type Store = {
   addFood: (meal: MealKey, food: FoodItem, quantity?: number) => void
   removeEntry: (meal: MealKey, entryId: string) => void
   setQuantity: (meal: MealKey, entryId: string, quantity: number) => void
-  addWater: (delta: number) => void
+  moveEntry: (from: MealKey, entryId: string, to: MealKey) => void
+  addWater: (delta: number, max?: number) => void
   resetDay: () => void
   history: DayHistory[]
 }
@@ -227,13 +292,19 @@ export function FoodLogProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, emptyState)
   const [hydrated, setHydrated] = useState(false)
   const todayRef = useRef(todayKey())
+  // Dernière version du journal, accessible depuis l'intervalle de bascule
+  // (qui ne se ré-abonne pas à chaque changement) → sert à archiver la journée
+  // qui se termine, avec ses repas détaillés.
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY)
       const loaded = normalize(raw ? JSON.parse(raw) : null)
       if (loaded.date !== todayKey()) {
-        // The stored day is over: archive it, start fresh at 0.
+        // The stored day is over: archive it (detail included), start fresh at 0.
+        archiveFromLog(loaded)
         dispatch({ type: "hydrate", state: rollover(loaded) })
       } else {
         dispatch({ type: "hydrate", state: loaded })
@@ -250,6 +321,7 @@ export function FoodLogProvider({ children }: { children: React.ReactNode }) {
     const id = window.setInterval(() => {
       if (todayKey() !== todayRef.current) {
         todayRef.current = todayKey()
+        archiveFromLog(stateRef.current)
         dispatch({ type: "rollover" })
       }
     }, 30_000)
@@ -277,7 +349,13 @@ export function FoodLogProvider({ children }: { children: React.ReactNode }) {
       removeEntry: (meal, entryId) => dispatch({ type: "remove", meal, entryId }),
       setQuantity: (meal, entryId, quantity) =>
         dispatch({ type: "setQuantity", meal, entryId, quantity: Math.max(0, quantity) }),
-      addWater: (delta) => dispatch({ type: "water", delta: Math.max(-MAX_WATER, Math.min(MAX_WATER, delta)) }),
+      moveEntry: (from, entryId, to) => dispatch({ type: "move", from, entryId, to }),
+      addWater: (delta, max) =>
+        dispatch({
+          type: "water",
+          delta: Math.max(-MAX_WATER, Math.min(MAX_WATER, delta)),
+          max,
+        }),
       resetDay: () => dispatch({ type: "reset" }),
       history: state.history,
     }),

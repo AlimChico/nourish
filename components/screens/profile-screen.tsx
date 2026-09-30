@@ -15,14 +15,19 @@ import {
   Award,
   ScanLine,
   Users,
+  BookOpen,
+  CalendarDays,
 } from "lucide-react"
 import { usePremium, FREE_SCANS_PER_DAY } from "@/lib/premium"
 import { useTheme } from "@/lib/use-theme"
 import { useAccount, initialsOf } from "@/lib/account"
 import { InstallGuide } from "@/components/install-guide"
+import { useXp } from "@/components/use-xp"
+import { useWeight } from "@/lib/weight"
+import { useStreak } from "@/components/use-streak"
 import { nativeShare } from "@/lib/share"
 import { Share2 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { barWidth, cn } from "@/lib/utils"
 
 const goalLabels = { lose: "Lose weight", maintain: "Maintain", gain: "Gain muscle" } as const
 
@@ -31,21 +36,57 @@ export function ProfileScreen({
   onOpenPremium,
   onOpenSettings,
   onOpenCommunity,
+  onOpenTutorial,
+  onOpenHistory,
+  onOpenProgress,
   onLogout,
 }: {
   onOpenCalculator: () => void
   onOpenPremium: () => void
   onOpenSettings: () => void
   onOpenCommunity: () => void
+  /** Rejoue le parcours d'introduction (les 5 écrans du premier lancement). */
+  onOpenTutorial?: () => void
+  /** Ouvre l'historique des repas (jours passés). */
+  onOpenHistory?: () => void
+  /** Bascule sur l'onglet Progress (poids & courbes). */
+  onOpenProgress?: () => void
   onLogout: () => void
 }) {
   const { isPremium, premium, freeScansLeft, scansUsedToday } = usePremium()
   const { theme, toggle } = useTheme()
   const { state: account, targets, update } = useAccount()
+  const xp = useXp()
+  const weight = useWeight()
+  const streak = useStreak()
   const initials = initialsOf(account.name)
 
+  /**
+   * Parcours du poids : du premier poids enregistré vers l'objectif. Sans
+   * historique on retombe sur le poids du profil, pour ne jamais afficher un
+   * chiffre inventé ni une barre vide sans explication.
+   */
+  const journey = (() => {
+    const series = [...weight.entries].reverse()
+    const start = series[0]?.kg ?? account.weight
+    const current = weight.latest?.kg ?? account.weight
+    const target = account.targetWeight
+    const span = start - target
+    const done = start - current
+    const pct = Math.abs(span) < 0.1 ? 100 : Math.max(0, Math.min(100, Math.round((done / span) * 100)))
+    return {
+      start,
+      current,
+      target,
+      toGo: Math.round((current - target) * 10) / 10,
+      since: series.length > 1 ? Math.round((current - start) * 10) / 10 : null,
+      pct,
+      weighIns: series.length,
+    }
+  })()
+
   return (
-    <div className="aurora-glow mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:px-6">
+    <div className="mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:px-6">
       {/* Profile header */}
       <header className="flex items-center gap-4">
         <div className="relative">
@@ -72,9 +113,13 @@ export function ProfileScreen({
             Goal: {goalLabels[account.goal]} · {targets.calories} kcal
           </p>
         </div>
-        <span className="flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-xs font-bold text-primary">
+        {/* Niveau réel (barème XP), plus de valeur en dur. */}
+        <span
+          className="flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-xs font-bold text-primary"
+          title={`${xp.totalXp.toLocaleString()} XP · ${xp.level.title}`}
+        >
           <Award className="h-3.5 w-3.5" />
-          Lvl 4
+          Lvl {xp.level.level}
         </span>
       </header>
 
@@ -132,11 +177,50 @@ export function ProfileScreen({
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${Math.min((scansUsedToday / FREE_SCANS_PER_DAY) * 100, 100)}%` }}
+              style={{ width: barWidth((scansUsedToday / FREE_SCANS_PER_DAY) * 100) }}
             />
           </div>
         </section>
       )}
+
+      {/* Corps & progression : résumé du poids + habitudes, avec les accès directs */}
+      <Section title="Body & progress">
+        <div className="px-4 py-4">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Current</p>
+              <p className="text-2xl font-extrabold tabular-nums">
+                {journey.current}
+                <span className="ml-1 text-sm font-bold text-muted-foreground">kg</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Target</p>
+              <p className="text-2xl font-extrabold tabular-nums text-primary">
+                {journey.target}
+                <span className="ml-1 text-sm font-bold text-muted-foreground">kg</span>
+              </p>
+            </div>
+          </div>
+          {/* Barre toujours visible, même à 0 % (#44) */}
+          <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-primary to-[#a7f3d0] transition-[width] duration-700"
+              style={{ width: barWidth(journey.pct) }}
+            />
+          </div>
+          <p className="mt-1.5 text-[11px] font-semibold text-muted-foreground">
+            {journey.pct}% of the way · {Math.abs(journey.toGo)} kg {journey.toGo > 0 ? "to lose" : journey.toGo < 0 ? "to gain" : "— goal reached 🎉"}
+            {journey.since !== null && ` · ${journey.since > 0 ? "+" : ""}${journey.since} kg since your first weigh-in`}
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">
+          <MiniStat label="Streak" value={`${streak}d`} emoji="🔥" />
+          <MiniStat label="Days logged" value={String(xp.daysTracked)} emoji="📅" />
+          <MiniStat label="Weigh-ins" value={String(journey.weighIns)} emoji="⚖️" />
+          <MiniStat label="Level" value={String(xp.level.level)} emoji="🏆" />
+        </div>
+      </Section>
 
       {/* Install as an app — platform-aware PWA tutorial */}
       <InstallGuide />
@@ -149,7 +233,14 @@ export function ProfileScreen({
         <Row icon={Calculator} label="Calorie calculator" onClick={onOpenCalculator} tone="primary" />
         <Row icon={Users} label="Communauté — défis & recettes" onClick={onOpenCommunity} tone="primary" />
         <Row icon={Target} label="Goals & targets" onClick={onOpenSettings} tone="carbs" />
-        <Row icon={Ruler} label="Body measurements" onClick={onOpenSettings} tone="steps" />
+        <Row
+          icon={Ruler}
+          label="Body measurements & weight"
+          onClick={onOpenProgress ?? onOpenSettings}
+          tone="steps"
+        />
+        <Row icon={CalendarDays} label="Meal history" onClick={onOpenHistory} tone="protein" />
+        <Row icon={BookOpen} label="Revoir le tutoriel" onClick={onOpenTutorial} tone="fat" />
       </Section>
 
       {/* Preferences */}
@@ -213,6 +304,21 @@ function ShareAppCard() {
       </span>
       <Share2 className="h-5 w-5 shrink-0 text-primary" />
     </button>
+  )
+}
+
+/** Petite statistique alignée (emoji + valeur + libellé). */
+function MiniStat({ label, value, emoji }: { label: string; value: string; emoji: string }) {
+  return (
+    <div className="min-w-0 flex-1 text-center">
+      <p className="text-sm font-extrabold tabular-nums">
+        <span aria-hidden className="mr-0.5">
+          {emoji}
+        </span>
+        {value}
+      </p>
+      <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+    </div>
   )
 }
 

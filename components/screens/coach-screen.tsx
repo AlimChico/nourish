@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { X, Send, Sparkles, Loader2, Crown } from "lucide-react"
+import { X, Send, Sparkles, Loader2, Crown, Volume2, VolumeX } from "lucide-react"
 import { useAccount } from "@/lib/account"
 import { useFoodLog, dayTotals } from "@/lib/food-log"
 import { useHealth } from "@/lib/health"
@@ -9,11 +9,14 @@ import { usePremium } from "@/lib/premium"
 import { useWeight } from "@/lib/weight"
 import { useStreak } from "@/components/use-streak"
 import { DERJA_SUGGESTIONS } from "@/lib/derja"
+import { speak, stopSpeaking, ttsSupported } from "@/lib/tts"
 import { cn } from "@/lib/utils"
+import { appDateKey } from "@/lib/date-key"
 
 const FREE_DAILY_CHATS = 3
 const CHAT_KEY = "sahtek.coach.chat.v1"
 const QUOTA_KEY = "sahtek.coach.quota.v1"
+const VOICE_KEY = "sahtek.coach.voice.v1"
 
 type Msg = { role: "user" | "assistant"; content: string }
 
@@ -25,7 +28,7 @@ const SUGGESTIONS = [
 ]
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10)
+  return appDateKey()
 }
 
 export function CoachScreen({ onClose }: { onClose: () => void }) {
@@ -42,7 +45,27 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [usedToday, setUsedToday] = useState(0)
   const [tunisianMode, setTunisianMode] = useState(false) // 🇹🇳 derja toggle
+  // 🔊 Le coach parle : la réponse est lue à voix haute (Web Speech API).
+  const [voiceOn, setVoiceOn] = useState(false)
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null)
+  const [ttsOk, setTtsOk] = useState(false)
   const endRef = useRef<HTMLDivElement | null>(null)
+
+  // Détection côté client uniquement (aucun mismatch d'hydratation) + amorçage
+  // du chargement des voix (Chrome les charge en différé).
+  useEffect(() => {
+    const ok = ttsSupported()
+    setTtsOk(ok)
+    if (ok) {
+      window.speechSynthesis.getVoices()
+      const warm = () => window.speechSynthesis.getVoices()
+      window.speechSynthesis.addEventListener?.("voiceschanged", warm)
+      return () => {
+        window.speechSynthesis.removeEventListener?.("voiceschanged", warm)
+        stopSpeaking()
+      }
+    }
+  }, [])
 
   useEffect(() => {
     try {
@@ -56,9 +79,47 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
         const q = JSON.parse(rawQuota) as { date: string; used: number }
         setUsedToday(q.date === todayKey() ? q.used : 0)
       }
+      setVoiceOn(localStorage.getItem(VOICE_KEY) === "1")
     } catch {
       // corrupted storage
     }
+  }, [])
+
+  /** Langue de lecture : derja → arabe tunisien, sinon français. */
+  const speechLang = tunisianMode ? "ar-TN" : "fr-FR"
+
+  /** Lit (ou coupe) un message — le bouton reste accessible même si l'auto est off. */
+  const toggleSpeak = (index: number, text: string) => {
+    if (speakingIdx === index) {
+      stopSpeaking()
+      setSpeakingIdx(null)
+      return
+    }
+    const ok = speak(text, speechLang, { onEnd: () => setSpeakingIdx(null) })
+    setSpeakingIdx(ok ? index : null)
+  }
+
+  const toggleVoice = () => {
+    const next = !voiceOn
+    setVoiceOn(next)
+    try {
+      localStorage.setItem(VOICE_KEY, next ? "1" : "0")
+    } catch {
+      // storage indisponible
+    }
+    if (!next) {
+      stopSpeaking()
+      setSpeakingIdx(null)
+    } else {
+      // Premier clic = geste utilisateur : on amorce la voix tout de suite
+      // (Safari iOS exige une interaction avant toute lecture).
+      speak(tunisianMode ? "Wakha, bech nkalmek bel derja." : "C'est parti, je te lis mes réponses à voix haute.", speechLang)
+    }
+  }
+
+  useEffect(() => {
+    // Quitter le coach coupe la voix.
+    return () => stopSpeaking()
   }, [])
 
   useEffect(() => {
@@ -83,6 +144,11 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
   const send = async (text: string) => {
     const question = text.trim()
     if (!question || busy) return
+    // Une nouvelle question coupe la lecture en cours.
+    if (speakingIdx !== null) {
+      stopSpeaking()
+      setSpeakingIdx(null)
+    }
     setError(null)
     const nextMessages = [...messages, { role: "user" as const, content: question }]
     setMessages(nextMessages)
@@ -119,6 +185,14 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
       }
       const finalMessages = [...nextMessages, { role: "assistant" as const, content: data.answer }]
       setMessages(finalMessages)
+      // 🔊 Mode voix : le coach lit sa réponse dès qu'elle arrive.
+      if (voiceOn && ttsOk) {
+        const idx = finalMessages.length - 1
+        const ok = speak(data.answer, tunisianMode ? "ar-TN" : "fr-FR", {
+          onEnd: () => setSpeakingIdx(null),
+        })
+        setSpeakingIdx(ok ? idx : null)
+      }
       if (!isPremium) {
         const used = usedToday + 1
         setUsedToday(used)
@@ -139,7 +213,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
   const quotaLeft = isPremium ? null : Math.max(0, FREE_DAILY_CHATS - usedToday)
 
   return (
-    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background aurora-glow animate-slide-up">
       {/* Colonne de lecture centrée sur tablette (ligne courte = lisible) */}
       <div className="mx-auto flex h-full w-full max-w-2xl flex-col">
       {/* Header */}
@@ -169,6 +243,23 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
           >
             🇹🇳
           </button>
+          {ttsOk && (
+            <button
+              type="button"
+              onClick={toggleVoice}
+              aria-pressed={voiceOn}
+              aria-label="Lire les réponses à voix haute"
+              title="Le coach lit ses réponses à voix haute 🔊"
+              className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-full transition-all active:scale-90",
+                voiceOn
+                  ? "bg-primary/25 text-primary ring-2 ring-primary/50"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+          )}
           <button type="button" onClick={onClose} aria-label="Fermer le coach" className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
             <X className="h-5 w-5" />
           </button>
@@ -199,6 +290,24 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
               )}
             >
               <MarkdownLite text={m.content} />
+              {m.role === "assistant" && ttsOk && (
+                <button
+                  type="button"
+                  onClick={() => toggleSpeak(i, m.content)}
+                  aria-label={speakingIdx === i ? "Arrêter la lecture" : "Écouter ce conseil"}
+                  className="mt-2 flex items-center gap-1.5 rounded-full bg-accent/60 px-2.5 py-1 text-[11px] font-bold text-primary active:scale-95"
+                >
+                  {speakingIdx === i ? (
+                    <>
+                      <VolumeX className="h-3.5 w-3.5" /> Stop
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="h-3.5 w-3.5" /> Écouter
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         ))}

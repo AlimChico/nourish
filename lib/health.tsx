@@ -22,6 +22,8 @@ export type HealthDay = {
   sensorSteps: number // subset of steps measured by the device
 }
 
+import { appDateKey } from "@/lib/date-key"
+
 export type HealthState = {
   days: Record<string, HealthDay>
 }
@@ -29,8 +31,11 @@ export type HealthState = {
 const STORAGE_KEY = "nourish.health.v1"
 const MAX_DAYS = 365
 
+/** Clé de jour santé — MÊME fuseau que le journal (voir `lib/date-key.ts`) :
+ *  sans cela, pas/water du jour pouvaient se retrouver sur deux jours différents
+ *  autour de minuit. */
 function todayKey(now = new Date()): string {
-  return now.toISOString().slice(0, 10)
+  return appDateKey(now)
 }
 
 function emptyDay(): HealthDay {

@@ -8,10 +8,20 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "build:android": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android",
+    "publish:apk": "node scripts/publish-apk.mjs",
+    "test:sw": "node scripts/sw-fetch-test.mjs",
+    "assets:android": "node scripts/generate-android-assets.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@vercel/analytics": "1.6.1",
     "@zxing/browser": "^0.1.5",
     "class-variance-authority": "^0.7.1",
@@ -28,6 +38,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24",
     "@types/react": "^19",

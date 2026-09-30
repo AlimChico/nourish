@@ -24,6 +24,7 @@ import {
   Download,
   Activity,
   Pencil,
+  Trophy,
 } from "lucide-react"
 import { useAccount, type Gender, type Goal } from "@/lib/account"
 import { useSync } from "@/lib/sync"
@@ -31,6 +32,7 @@ import { useSmartNotifications } from "@/lib/notifications"
 import { usePushNotifications } from "@/lib/push"
 import { activityLevels } from "@/lib/nutrition-data"
 import { useTheme } from "@/lib/use-theme"
+import { useXp } from "@/components/use-xp"
 import { cn } from "@/lib/utils"
 
 type Section =
@@ -60,9 +62,16 @@ const diets: { key: string; label: string; desc: string; emoji: string }[] = [
   { key: "halal", label: "Halal", desc: "Halal meat only", emoji: "✅" },
 ]
 
-export function SettingsScreen({ onClose }: { onClose: () => void }) {
+export function SettingsScreen({
+  onClose,
+  onOpenLeaderboard,
+}: {
+  onClose: () => void
+  onOpenLeaderboard?: () => void
+}) {
   const { state, update, targets, wipeAll } = useAccount()
   const { status, logout } = useSync()
+  const xp = useXp()
   const notif = useSmartNotifications()
   const push = usePushNotifications()
 
@@ -108,7 +117,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up sm:mx-auto sm:max-w-2xl sm:border-x sm:border-[#a7f3d0]/10 sm:shadow-2xl">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background aurora-glow animate-slide-up sm:mx-auto sm:max-w-2xl sm:border-x sm:border-[#a7f3d0]/10 sm:shadow-2xl">
       {/* Header */}
       <header className="flex items-center gap-3 border-b border-border px-4 pb-3 pt-5 sm:px-6">
         {section !== "root" ? (
@@ -146,6 +155,44 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 <p className="truncate text-sm text-muted-foreground">{state.email || "no email"}</p>
               </div>
             </div>
+
+            {/* Niveau / XP / classement */}
+            <Group title="Progress & rewards">
+              <div className="flex items-center gap-3 px-4 pt-4">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[#0f766e] text-lg font-extrabold text-primary-foreground shadow-[0_6px_18px_rgba(52,211,153,0.3)]">
+                  {xp.level.level}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-extrabold tracking-tight">
+                    Level {xp.level.level}
+                    <span className="ml-1.5 font-bold text-muted-foreground">{xp.level.title}</span>
+                  </p>
+                  <p className="text-[11px] font-semibold tabular-nums text-muted-foreground">
+                    {xp.totalXp.toLocaleString()} XP total · {xp.level.intoLevel}/{xp.level.forNext} XP to level{" "}
+                    {xp.level.level + 1}
+                  </p>
+                </div>
+              </div>
+              <div className="px-4 pb-3 pt-3">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-[#a7f3d0] transition-[width] duration-700"
+                    style={{ width: `${Math.round(Math.max(0.03, xp.level.progress) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+                <Stat label="Days logged" value={String(xp.daysTracked)} />
+                <Stat label="Best streak" value={`${xp.bestStreak} d`} />
+                <Stat label="XP today" value={`+${xp.todayXp}`} />
+              </div>
+              <Row
+                icon={Trophy}
+                label="Leaderboard"
+                desc={status === "authed" ? "Your rank vs all Sahtek players" : "Sign in to appear in the ranking"}
+                onClick={onOpenLeaderboard}
+              />
+            </Group>
 
             <Group title="Your profile">
               <Row icon={User} label="Account" desc="Name, email" onClick={() => setSection("account")} />
@@ -203,6 +250,10 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                   trailing={<span className="text-sm font-extrabold text-primary">{notif.digest.hour}:00</span>}
                 />
               )}
+              {/* Rappels de repas (matin / midi / soir) — un tap = heure suivante. */}
+              {notif.permission === "granted" &&
+                state.notifications &&
+                MEAL_REMINDERS.map((def) => <MealReminderRow key={def.key} def={def} />)}
               <Row
                 icon={Bell}
                 label="Notifications"
@@ -471,6 +522,50 @@ function Row({
 
 function ChevronRight() {
   return <span className="text-lg text-muted-foreground">›</span>
+}
+
+const MEAL_REMINDERS = [
+  { key: "breakfast", label: "Rappel petit-déjeuner", icon: "🌅", fallback: 9 },
+  { key: "lunch", label: "Rappel déjeuner", icon: "🥗", fallback: 14 },
+  { key: "dinner", label: "Rappel dîner", icon: "🍽️", fallback: 21 },
+] as const
+
+/**
+ * Un rappel de repas : un tap active (heure par défaut), puis avance d'une heure,
+ * et après 23 h repasse sur « Off ». Un seul contrôle = pas d'ambiguïté, et tous
+ * les rappels restent modifiables d'une main.
+ */
+function MealReminderRow({ def }: { def: (typeof MEAL_REMINDERS)[number] }) {
+  const notif = useSmartNotifications()
+  const hour = notif.mealReminders[def.key]
+  return (
+    <Row
+      icon={Bell}
+      label={`${def.icon} ${def.label}`}
+      desc={
+        hour === null
+          ? "Désactivé — tape pour activer"
+          : `Chaque jour à ${hour}h si ce repas n'est pas encore loggé`
+      }
+      onClick={() => notif.setMealReminder(def.key, hour === null ? def.fallback : hour >= 23 ? null : hour + 1)}
+      trailing={
+        <span className="flex items-center gap-2">
+          {hour !== null && <span className="text-sm font-extrabold tabular-nums text-primary">{hour}:00</span>}
+          <Toggle on={hour !== null} />
+        </span>
+      }
+    />
+  )
+}
+
+/** Petite statistique alignée (libellé au-dessus de la valeur). */
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex-1 text-center">
+      <p className="text-base font-extrabold tabular-nums text-primary">{value}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+    </div>
+  )
 }
 
 function Toggle({ on }: { on?: boolean }) {

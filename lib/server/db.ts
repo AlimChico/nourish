@@ -109,6 +109,13 @@ async function makePostgres(url: string) {
   await sql`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_scans_user_date ON scans(user_id, date)`
   await sql`CREATE INDEX IF NOT EXISTS idx_events_user_date ON events(user_id, date)`
+  // Index ajoutés après audit des requêtes réelles (voir AUDIT_DB.md) :
+  //  - scans(user_id, created_at DESC)   → « derniers scans » (listScans)
+  //  - sessions(expires_at)              → ménage/compter les sessions actives
+  //  - users(created_at DESC)            → derniers inscrits (panneau admin)
+  await sql`CREATE INDEX IF NOT EXISTS idx_scans_user_created ON scans(user_id, created_at DESC)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_users_created ON users(created_at DESC)`
   await sql`CREATE TABLE IF NOT EXISTS premium_codes (
     code TEXT PRIMARY KEY,
     months INT NOT NULL,
@@ -144,6 +151,9 @@ async function makePostgres(url: string) {
     PRIMARY KEY (user_id, challenge_key)
   )`
   await sql`CREATE INDEX IF NOT EXISTS idx_recipes_created ON community_recipes(created_at DESC)`
+  // Suppression d'un compte = cascade sur les enfants : sans index sur user_id,
+  // Postgres scanne toute la table (recipes / likes).
+  await sql`CREATE INDEX IF NOT EXISTS idx_recipes_user ON community_recipes(user_id)`
   await sql`CREATE TABLE IF NOT EXISTS recipe_likes (
     recipe_id TEXT NOT NULL REFERENCES community_recipes(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -159,6 +169,10 @@ async function makePostgres(url: string) {
     last_sent_date TEXT NOT NULL DEFAULT ''
   )`
   await sql`CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_likes_user ON recipe_likes(user_id)`
+  // Classement des défis : filtre par challenge_key + tri par points
+  // (requête du leaderboard) — la PK (user_id, challenge_key) ne peut pas servir.
+  await sql`CREATE INDEX IF NOT EXISTS idx_challenge_points ON challenge_progress(challenge_key, points DESC)`
   await sql`CREATE TABLE IF NOT EXISTS visits (
     day TEXT NOT NULL,
     visitor TEXT NOT NULL,
@@ -236,6 +250,9 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_scans_user_date ON scans(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_events_user_date ON events(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_scans_user_created ON scans(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_users_created ON users(created_at DESC);
 CREATE TABLE IF NOT EXISTS premium_codes (
   code TEXT PRIMARY KEY, months INTEGER NOT NULL, max_uses INTEGER NOT NULL DEFAULT 1,
   uses INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, days INTEGER
@@ -255,6 +272,7 @@ CREATE TABLE IF NOT EXISTS challenge_progress (
   points INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, challenge_key)
 );
 CREATE INDEX IF NOT EXISTS idx_recipes_created ON community_recipes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_recipes_user ON community_recipes(user_id);
 CREATE TABLE IF NOT EXISTS recipe_likes (
   recipe_id TEXT NOT NULL REFERENCES community_recipes(id) ON DELETE CASCADE,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -266,6 +284,8 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   last_sent_date TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_likes_user ON recipe_likes(user_id);
+CREATE INDEX IF NOT EXISTS idx_challenge_points ON challenge_progress(challenge_key, points DESC);
 CREATE TABLE IF NOT EXISTS visits (
   day TEXT NOT NULL, visitor TEXT NOT NULL, user_id TEXT,
   created_at INTEGER NOT NULL, PRIMARY KEY (day, visitor)
@@ -285,6 +305,24 @@ function canWrite(dir: string): boolean {
 // ---------------------------------------------------------------------------
 // Unified API (async — Postgres requires it)
 // ---------------------------------------------------------------------------
+
+/**
+ * Lecture brute d'une table complète — réservée à l'export de sauvegarde admin.
+ * Le nom de table est validé par une allowlist stricte (aucune interpolation
+ * libre : pas d'injection possible), et la limite borne la taille du dump.
+ */
+export async function selectAll(table: string, limit = 20000): Promise<Record<string, unknown>[]> {
+  if (!/^[a-z_]{1,32}$/.test(table)) return []
+  const max = Math.max(1, Math.min(50000, Math.floor(limit)))
+  if (usingPostgres) {
+    const client = await ensurePg()
+    const rows = await (client as unknown as { unsafe: (q: string) => Promise<Record<string, unknown>[]> }).unsafe(
+      `SELECT * FROM ${table} ORDER BY 1 LIMIT ${max}`,
+    )
+    return Array.isArray(rows) ? rows : []
+  }
+  return sqlite!.prepare(`SELECT * FROM ${table} ORDER BY 1 LIMIT ?`).all(max) as Record<string, unknown>[]
+}
 
 export const db = {
   async findUserByEmail(email: string): Promise<{ id: string; email: string; name: string; password: string } | null> {
@@ -578,6 +616,52 @@ export const db = {
          ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
       )
       .run(userId, json, now)
+  },
+
+  /**
+   * Toutes les journées journalisées d'un utilisateur (date + JSON) — base du
+   * calcul d'XP/du classement. Borné à 400 jours comme `listDays`.
+   */
+  async listDayRows(userId: string): Promise<{ date: string; data: string }[]> {
+    if (usingPostgres) {
+      const rows = await sql`SELECT date, data FROM day_logs WHERE user_id = ${userId} ORDER BY date DESC LIMIT 400`
+      return rows.map((r) => ({ date: String(r.date), data: String(r.data) }))
+    }
+    return sqlite!.prepare("SELECT date, data FROM day_logs WHERE user_id = ? ORDER BY date DESC LIMIT 400").all(userId) as {
+      date: string
+      data: string
+    }[]
+  },
+
+  /**
+   * Nom + journées de TOUS les utilisateurs ayant au moins un jour loggé —
+   * utilisé par le classement XP. Volontairement borné (2000 comptes) : au-delà,
+   * passer par un compteur XP matérialisé par utilisateur.
+   */
+  async xpRowsForAllUsers(limit = 2000): Promise<{ id: string; name: string; email: string; date: string; data: string }[]> {
+    const max = Math.max(1, Math.min(5000, Math.floor(limit)))
+    if (usingPostgres) {
+      const rows = await sql`
+        SELECT u.id, u.name, u.email, d.date, d.data
+        FROM users u
+        JOIN day_logs d ON d.user_id = u.id
+        ORDER BY u.id
+        LIMIT ${max * 400}`
+      return rows.map((r) => ({
+        id: String(r.id),
+        name: String(r.name),
+        email: String(r.email),
+        date: String(r.date),
+        data: String(r.data),
+      }))
+    }
+    return sqlite!
+      .prepare(
+        `SELECT u.id, u.name, u.email, d.date, d.data
+         FROM users u JOIN day_logs d ON d.user_id = u.id
+         ORDER BY u.id LIMIT ?`,
+      )
+      .all(max * 400) as { id: string; name: string; email: string; date: string; data: string }[]
   },
 
   async getDay(userId: string, date: string): Promise<unknown | null> {

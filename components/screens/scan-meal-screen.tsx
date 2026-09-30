@@ -14,13 +14,48 @@ import {
   Loader2,
   Lightbulb,
   AlertTriangle,
+  WifiOff,
+  ServerCrash,
+  PencilLine,
 } from "lucide-react"
 import { useFoodLog, type FoodItem, type MealKey } from "@/lib/food-log"
-import { analyzeMealReal, targetForTime, type ScanResult, type ScannedItem } from "@/lib/meal-scan"
+import {
+  analyzeMealReal,
+  makeScanThumbnail,
+  ScanError,
+  targetForTime,
+  type ScanErrorKind,
+  type ScanResult,
+  type ScannedItem,
+} from "@/lib/meal-scan"
 import { mealMeta } from "@/lib/food-log"
 import { cn } from "@/lib/utils"
 
-type Phase = "capture" | "analyzing" | "review" | "nofood"
+type Phase = "capture" | "analyzing" | "review" | "nofood" | "unavailable"
+
+/** Message affiché quand le scanner ne marche pas — un cas par cause réelle. */
+const FAILURE_COPY: Record<ScanErrorKind, { title: string; body: string }> = {
+  unavailable: {
+    title: "Scanner indisponible",
+    body: "Le moteur d'analyse ne répond pas pour le moment. Ta photo est gardée sur ton appareil — réessaie dans quelques minutes, ou saisis ton plat à la main.",
+  },
+  quota: {
+    title: "Scanner saturé",
+    body: "Le scanner a reçu trop de photos d'un coup et fait une pause. Réessaie dans quelques minutes : tes scans restent illimités, juste plus lents.",
+  },
+  offline: {
+    title: "Pas de connexion",
+    body: "Impossible de joindre le scanner : vérifie ta connexion (Wi-Fi ou données) puis relance l'analyse.",
+  },
+  noFood: {
+    title: "No food detected",
+    body: "We couldn't find any food in this photo. Frame the whole plate, add some light, and try again.",
+  },
+  badImage: {
+    title: "Photo illisible",
+    body: "La photo n'a pas pu être lue. Reprends-la ou choisis-en une autre dans ta galerie.",
+  },
+}
 
 export function ScanMealScreen({ onClose }: { onClose: () => void }) {
   const { addFood } = useFoodLog()
@@ -30,6 +65,9 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
   const [kept, setKept] = useState<Record<number, boolean>>({})
   const [qtys, setQtys] = useState<Record<number, number>>({})
   const [thumbnail, setThumbnail] = useState<string | undefined>(undefined)
+  // Miniature persistable : c'est elle qui reste sur le dashboard après « Log ».
+  const [scanPhoto, setScanPhoto] = useState<string | undefined>(undefined)
+  const [failure, setFailure] = useState<{ kind: ScanErrorKind; detail: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [flash, setFlash] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -138,6 +176,11 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
     stopCamera()
     setPhase("analyzing")
     setResult(null)
+    setFailure(null)
+    setError(null)
+    // Miniature légère (~15 Ko) préparée tout de suite : elle sera attachée au
+    // plat enregistré pour que la photo reste sur le dashboard.
+    void makeScanThumbnail(thumb).then((p) => setScanPhoto(p))
     try {
       const r = await analyzeMealReal(thumb)
       setResult(r)
@@ -145,15 +188,19 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
       setQtys(Object.fromEntries(r.items.map((_, i) => [i, r.items[i].quantity])))
       setPhase("review")
     } catch (err) {
-      if (err && typeof err === "object" && (err as { noFood?: boolean }).noFood) {
-        // Photo sans aliment reconnu : état dédié (pas de liste vide).
-        setError(null)
-        setPhase("nofood")
+      if (err instanceof ScanError) {
+        if (err.kind === "noFood") {
+          // Photo sans aliment reconnu : état dédié (pas de liste vide).
+          setPhase("nofood")
+          return
+        }
+        // Scanner/IA/réseau en panne : on le DIT clairement, jamais de faux plat.
+        setFailure({ kind: err.kind, detail: err.message })
+        setPhase("unavailable")
         return
       }
-      setError("Analyse impossible — vérifie ta connexion puis réessaie (ou importe une photo).")
-      setPhase("capture")
-      void startCamera()
+      setFailure({ kind: "unavailable", detail: err instanceof Error ? err.message : "" })
+      setPhase("unavailable")
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -161,9 +208,16 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
   const retake = useCallback(() => {
     setResult(null)
     setError(null)
+    setFailure(null)
     setPhase("capture")
     void startCamera()
   }, [startCamera])
+
+  /** Relance l'analyse sur la MÊME photo (le cas le plus fréquent : panne passagère). */
+  const retryAnalysis = useCallback(() => {
+    if (thumbnail) void runAnalysis(thumbnail)
+    else retake()
+  }, [thumbnail, runAnalysis, retake])
 
   const activeItems = result
     ? result.items.filter((_, i) => kept[i] !== false)
@@ -183,14 +237,18 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
         carbs: Math.round(it.carbs),
         fat: Math.round(it.fat),
         emoji: foodEmoji(it.name),
+        // La photo du plat suit le plat enregistré : elle réapparaît sur le
+        // dashboard (aujourd'hui) à côté des calories et des macros.
+        photo: scanPhoto,
+        scanned: true,
       }
       addFood(meal, food, qty)
     }
     onClose()
-  }, [result, activeItems, qtys, meal, addFood, onClose])
+  }, [result, activeItems, qtys, meal, addFood, onClose, scanPhoto])
 
   return (
-    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background animate-slide-up">
+    <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background aurora-glow animate-slide-up">
       {/* Header */}
       <div className={cn("flex items-center justify-between px-5 py-3", phase !== "review" && "text-[#e6fff1]")}>
         <div className="flex items-center gap-2">
@@ -209,6 +267,7 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
               {phase === "analyzing" && "AI is analyzing your meal…"}
               {phase === "review" && "Review what we detected"}
               {phase === "nofood" && "No food detected"}
+              {phase === "unavailable" && (failure ? FAILURE_COPY[failure.kind].title : "Scanner indisponible")}
             </p>
           </div>
         </div>
@@ -226,7 +285,73 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* Body */}
-      {phase === "nofood" ? (
+      {phase === "unavailable" ? (
+        /* ---------- Scanner indisponible : on le dit clairement ---------- */
+        <div className="relative flex flex-1 flex-col overflow-hidden">
+          {thumbnail && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={thumbnail}
+              alt="Captured meal"
+              className="absolute inset-0 h-full w-full scale-105 object-cover opacity-25 blur-[2px]"
+            />
+          )}
+          <div className="relative flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center text-[#e6fff1]">
+            <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#fbbf24]/15">
+              {failure?.kind === "offline" ? (
+                <WifiOff className="h-8 w-8 text-[#fbbf24]" />
+              ) : (
+                <ServerCrash className="h-8 w-8 text-[#fbbf24]" />
+              )}
+            </span>
+            <p className="text-lg font-extrabold">
+              {failure ? FAILURE_COPY[failure.kind].title : "Scanner indisponible"}
+            </p>
+            <p className="max-w-sm text-sm leading-relaxed text-[#e6fff1]/75">
+              {failure ? FAILURE_COPY[failure.kind].body : FAILURE_COPY.unavailable.body}
+            </p>
+            {failure && failure.kind !== "badImage" && redundantDetail(failure) && (
+              <p className="max-w-xs rounded-xl bg-[#a7f3d0]/8 px-3 py-2 text-[11px] leading-relaxed text-[#e6fff1]/45">
+                {failure.detail}
+              </p>
+            )}
+            <div className="mt-2 flex w-full max-w-xs flex-col gap-2">
+              <button
+                type="button"
+                onClick={retryAnalysis}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-extrabold text-primary-foreground active:scale-[0.98]"
+              >
+                <RotateCcw className="h-4 w-4" /> Réessayer l&apos;analyse
+              </button>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center justify-center gap-2 rounded-2xl border border-[#a7f3d0]/20 py-3 text-sm font-bold text-[#e6fff1]/85 active:scale-[0.98]"
+              >
+                <PencilLine className="h-4 w-4" /> Saisir / choisir une autre photo
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-2xl py-2.5 text-sm font-bold text-[#e6fff1]/60 active:scale-[0.98]"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) onPickFile(f)
+              e.target.value = ""
+            }}
+          />
+        </div>
+      ) : phase === "nofood" ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-secondary px-8 text-center text-[#e6fff1]">
           <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#a7f3d0]/10">
             <Camera className="h-8 w-8 text-[#e6fff1]/70" />
@@ -441,6 +566,20 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
       )}
     </div>
   )
+}
+
+/**
+ * Le message technique du serveur est-il utile à afficher en plus du texte
+ * grand public ? Non s'il dit déjà la même chose (on évite le doublon visible).
+ */
+function redundantDetail(failure: { kind: ScanErrorKind; detail: string } | null): string | undefined {
+  if (!failure?.detail) return undefined
+  if (failure.detail.length < 20) return undefined
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-zà-ÿ0-9]+/g, " ")
+  const a = norm(failure.detail)
+  const b = norm(FAILURE_COPY[failure.kind].body)
+  if (a === b || a.includes(b) || b.includes(a)) return undefined
+  return failure.detail
 }
 
 function foodEmoji(name: string): string {

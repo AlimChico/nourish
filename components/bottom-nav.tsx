@@ -51,7 +51,7 @@ export function BottomNav({ active, onChange }: { active: TabKey; onChange: (tab
       />
       <nav
         aria-label="Main navigation"
-        className="pointer-events-auto mx-auto mb-[calc(env(safe-area-inset-bottom,0px)+14px)] mt-2.5 flex w-full max-w-md items-stretch rounded-[1.55rem] border border-[#a7f3d0]/15 bg-[#0d1a13]/90 shadow-[0_18px_44px_rgba(0,0,0,0.55),0_4px_12px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(167,243,208,0.07)] backdrop-blur-xl sm:mb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] sm:mt-0"
+        className="surface-dark pointer-events-auto mx-auto mb-[calc(env(safe-area-inset-bottom,0px)+14px)] mt-2.5 flex w-full max-w-md items-stretch rounded-[1.55rem] border border-[#a7f3d0]/15 bg-[#0d1a13]/90 shadow-[0_18px_44px_rgba(0,0,0,0.55),0_4px_12px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(167,243,208,0.07)] backdrop-blur-xl sm:mb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] sm:mt-0"
       >
         {tabs.map((t) => {
           const Icon = t.icon

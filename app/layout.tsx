@@ -61,6 +61,14 @@ export const metadata: Metadata = {
     apple: '/apple-touch-icon.png',
   },
   manifest: '/manifest.webmanifest',
+  // Next.js 16 n'émet plus que le tag normalisé `mobile-web-app-capable`
+  // (l'ancien `apple-mobile-web-app-capable` a été déprécié côté Next).
+  // iOS s'appuie toujours sur le tag Apple — sans lui, « Sur l'écran d'accueil »
+  // rouvre l'app dans un onglet Safari avec la barre d'adresse au lieu du plein
+  // écran, et les startup images ne s'affichent pas. On émet donc les deux.
+  other: {
+    'apple-mobile-web-app-capable': 'yes',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -105,6 +113,14 @@ const jsonLd = {
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
 }
 
+// Enveloppe native (Capacitor / APK) : la barre de statut Android est repeinte
+// aux couleurs du thème courant. Le pont Capacitor n'existe que dans l'app
+// native — le site web ignore donc complètement ce script (aucun coût).
+// setBackgroundColor est déprécié depuis Android 15 (bord-à-bord imposé) :
+// l'échec est silencieux et sans conséquence, le fond de l'app assure la
+// continuité visuelle.
+const nativeShellInit = `(function(){var C=window.Capacitor;if(!C||!C.isNativePlatform||!C.isNativePlatform())return;function a(){var d=document.documentElement.classList.contains('dark');var s=C.Plugins&&C.Plugins.StatusBar;if(!s)return;if(s.setStyle){s.setStyle({style:d?'DARK':'LIGHT'}).catch(function(){})}if(s.setBackgroundColor){s.setBackgroundColor({color:d?'#0b0f0d':'#f2faf6'}).catch(function(){})}}a();if(window.MutationObserver){new MutationObserver(a).observe(document.documentElement,{attributes:true,attributeFilter:['class']})}})();`
+
 const themeInit = `try{var t=localStorage.getItem('nourish.theme.v1');var d=t!=='light';var r=document.documentElement;r.classList.toggle('dark',d);r.classList.toggle('light',!d);var m=document.querySelector('meta[name=theme-color]');if(m){m.setAttribute('content',d?'#0b0f0d':'#f2faf6')}}catch(e){}`
 
 export default function RootLayout({
@@ -137,6 +153,7 @@ export default function RootLayout({
                 : `if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister()})});if(window.caches){caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k)})})}}`,
           }}
         />
+        <script dangerouslySetInnerHTML={{ __html: nativeShellInit }} />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

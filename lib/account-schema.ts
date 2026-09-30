@@ -5,6 +5,16 @@ export type Goal = "lose" | "maintain" | "gain"
 export type Units = "metric" | "imperial"
 export type Diet = "none" | "vegetarian" | "vegan" | "pescatarian" | "halal"
 
+/**
+ * Rappels de repas : une heure (6–23) par repas, ou `null` pour désactiver.
+ * Suit le compte pour que les rappels survivent à un changement de téléphone.
+ */
+export type MealReminderKey = "breakfast" | "lunch" | "dinner"
+export type MealReminders = Record<MealReminderKey, number | null>
+
+export const MEAL_REMINDER_KEYS: MealReminderKey[] = ["breakfast", "lunch", "dinner"]
+export const DEFAULT_MEAL_REMINDERS: MealReminders = { breakfast: 9, lunch: 14, dinner: 21 }
+
 export type AccountState = {
   name: string
   email: string
@@ -24,6 +34,8 @@ export type AccountState = {
   digestEnabled: boolean
   /** Heure du rappel (fuseau Tunis), 12–22. */
   digestHour: number
+  /** Rappels « logger ce repas » : matin / midi / soir. */
+  mealReminders: MealReminders
   diet: Diet
   allergies: string[]
   onboarded: boolean
@@ -48,9 +60,27 @@ export const DEFAULT_ACCOUNT: AccountState = {
   notifications: true,
   digestEnabled: true,
   digestHour: 20,
+  mealReminders: { ...DEFAULT_MEAL_REMINDERS },
   diet: "none",
   allergies: [],
   onboarded: false,
+}
+
+/**
+ * Normalise les rappels de repas : heure entière entre 6 h et 23 h, ou `null`
+ * (désactivé). Un champ absent garde la valeur par défaut — un ancien compte
+ * n'est donc pas privé de ses rappels ; `null`/`false` les coupe explicitement.
+ */
+function normalizeMealReminders(raw: unknown): MealReminders {
+  const out: MealReminders = { ...DEFAULT_MEAL_REMINDERS }
+  if (raw === null || typeof raw !== "object") return out
+  const s = raw as Record<string, unknown>
+  for (const key of MEAL_REMINDER_KEYS) {
+    const v = s[key]
+    if (v === null || v === false) out[key] = null
+    else if (typeof v === "number" && isFinite(v)) out[key] = clamp(Math.round(v), 6, 23)
+  }
+  return out
 }
 
 const ALLERGY_RE = /^[a-z0-9 _-]{1,40}$/i
@@ -83,6 +113,7 @@ export function normalizeAccount(raw: unknown): AccountState {
     notifications: typeof s.notifications === "boolean" ? s.notifications : true,
     digestEnabled: typeof (s as { digestEnabled?: unknown }).digestEnabled === "boolean" ? (s as { digestEnabled: boolean }).digestEnabled : true,
     digestHour: clamp(Math.round(Number((s as { digestHour?: unknown }).digestHour) || DEFAULT_ACCOUNT.digestHour), 12, 22),
+    mealReminders: normalizeMealReminders((s as { mealReminders?: unknown }).mealReminders),
     diet:
       s.diet === "vegetarian" || s.diet === "vegan" || s.diet === "pescatarian" || s.diet === "halal"
         ? s.diet

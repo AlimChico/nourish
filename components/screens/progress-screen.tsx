@@ -1,7 +1,18 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Flame, Award, Target, CalendarDays, Droplets, Scale, Clock3, Check, TrendingDown, TrendingUp } from "lucide-react"
+import {
+  Flame,
+  Award,
+  Target,
+  CalendarDays,
+  Droplets,
+  Scale,
+  Clock3,
+  Check,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react"
 import { BarChart, LineChart } from "@/components/mini-charts"
 import { dayTotals, useFoodLog, type DayHistory, type MealKey } from "@/lib/food-log"
 import { mealMeta } from "@/lib/food-log"
@@ -10,8 +21,9 @@ import { useHealth } from "@/lib/health"
 import { useWeight } from "@/lib/weight"
 import { useStreak } from "@/components/use-streak"
 import { AdSlot, AD_SLOTS } from "@/components/ad-slot"
-import { cn } from "@/lib/utils"
+import { barWidth, cn } from "@/lib/utils"
 import { haptic } from "@/lib/haptic"
+import { shiftDateKey } from "@/lib/date-key"
 
 const ranges = ["7 days", "30 days", "90 days"] as const
 type RangeKey = (typeof ranges)[number]
@@ -22,12 +34,10 @@ function dayLabel(iso: string): string {
 }
 
 function shiftDate(iso: string, days: number): string {
-  const d = new Date(`${iso}T12:00:00`)
-  d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+  return shiftDateKey(iso, days)
 }
 
-export function ProgressScreen() {
+export function ProgressScreen({ onOpenHistory }: { onOpenHistory?: () => void } = {}) {
   const { state, history } = useFoodLog()
   const { state: account, targets } = useAccount()
   const { state: health } = useHealth()
@@ -147,9 +157,9 @@ export function ProgressScreen() {
   }, [state.meals])
 
   return (
-    <div className="aurora-glow mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:grid sm:grid-cols-2 sm:items-start sm:px-6">
-      <header className="flex items-center justify-between sm:col-span-2">
-        <div>
+    <div className="mx-auto flex w-full flex-col gap-6 px-5 pb-8 pt-2 sm:grid sm:grid-cols-2 sm:items-start sm:px-6">
+      <header className="flex items-center justify-between gap-3 sm:col-span-2">
+        <div className="min-w-0">
           <h1 className="text-2xl font-extrabold tracking-tight">Progress</h1>
           <p className="text-sm text-muted-foreground">
             {history.length > 0
@@ -157,6 +167,16 @@ export function ProgressScreen() {
               : "Your first day is being tracked."}
           </p>
         </div>
+        {onOpenHistory && (
+          <button
+            type="button"
+            onClick={onOpenHistory}
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-[#a7f3d0]/15 bg-card px-3 py-2 text-xs font-bold text-primary shadow-sm"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Meal history
+          </button>
+        )}
       </header>
 
       {/* Range switch */}
@@ -385,7 +405,7 @@ export function ProgressScreen() {
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                 <div
                   className={cn("h-full rounded-full transition-all", d.calories > targets.calories ? "bg-carbs" : "bg-primary")}
-                  style={{ width: `${Math.min((d.calories / targets.calories) * 100, 100)}%` }}
+                  style={{ width: barWidth((d.calories / targets.calories) * 100) }}
                 />
               </div>
               <p className="w-20 text-right text-sm font-extrabold tabular-nums">
@@ -415,7 +435,10 @@ function GoalBar({ label, value, max, className, suffix }: { label: string; valu
         </span>
       </div>
       <div className="h-3 overflow-hidden rounded-full bg-muted">
-        <div className={cn("h-full rounded-full transition-all duration-700", className)} style={{ width: `${max > 0 ? Math.min((value / max) * 100, 100) : 0}%` }} />
+        <div
+          className={cn("h-full rounded-full transition-all duration-700", className)}
+          style={{ width: barWidth(max > 0 ? (value / max) * 100 : 0) }}
+        />
       </div>
     </div>
   )
