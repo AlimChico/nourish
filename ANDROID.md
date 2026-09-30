@@ -12,14 +12,40 @@ session, Supabase et OAuth fonctionnent sans code supplémentaire).
 | Outil | Version | Notes |
 | --- | --- | --- |
 | Node.js | ≥ 22.5.0 | `engines` du package.json |
-| JDK | **17 ou 21** | Livré avec Android Studio ; AGP 8.13 / Gradle 8.14 |
-| Android Studio | dernière | Fournit le SDK et le JDK |
+| JDK | **21 obligatoire** | Voir ci-dessous : 17 ne suffit pas |
+| Android Studio | optionnel | Fournit une interface ; les outils en ligne de commande suffisent |
 | SDK Android | **API 36** | `compileSdk`/`targetSdk` (voir `android/variables.gradle`) |
-| `ANDROID_HOME` | — | Ex. `C:\Users\<toi>\AppData\Local\Android\Sdk` |
 
-Utilise le JDK fourni par Android Studio (`File > Settings > Build Tools >
-Gradle > Gradle JDK > 17`). Gradle télécharge des dépendances au premier build —
-la première compilation demande donc du réseau.
+**JDK 21, pas 17.** Les plugins Capacitor (`local-notifications`, `splash-screen`,
+`status-bar`) demandent un toolchain Java 21 : avec un JDK 17 seul, la
+configuration échoue sur « Cannot find a Java installation matching:
+{languageVersion=21} ». Gradle détecte le JDK 21 dès qu'il est installé à
+l'emplacement standard (`C:\Program Files\Microsoft\jdk-21…`) et que `JAVA_HOME`
+pointe dessus. Si ton installation est ailleurs, indique-la à Gradle dans
+`%USERPROFILE%\.gradle\gradle.properties` — fichier **personnel**, à ne pas
+committer, contrairement à `android/gradle.properties` :
+
+```properties
+org.gradle.java.installations.paths=C\:\\Program Files\\Microsoft\\jdk-21.0.12.101-hotspot
+```
+
+**Ce qui est installé sur ce poste** (aucun Android Studio, uniquement les outils
+de ligne de commande — largement suffisant pour construire l'APK) :
+
+- JDK 21 → `C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot`
+- JDK 17 → `C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot` (inutile au build)
+- SDK → `C:\Users\alimb\AppData\Local\Android\Sdk` (platform 36, build-tools
+  36.0.0 et 36.1.0, platform-tools)
+- `android/local.properties` contient le `sdk.dir` (fichier local, jamais committé)
+
+Chaque commande ci-dessous suppose `JAVA_HOME` positionné :
+
+```bash
+export JAVA_HOME='C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot'   # Git Bash
+```
+
+Gradle télécharge ses dépendances au premier build — la première compilation
+demande donc du réseau (et quelques minutes).
 
 ---
 
@@ -58,56 +84,32 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 ### APK / AAB de publication (release)
 
-Un build release doit être **signé**, sinon ni installation ni Play Store.
+Un build release doit être **signé**, sinon ni installation ni Play Store. C'est
+**déjà en place sur ce poste** :
 
-**a. Créer la clé de signature (une seule fois, à conserver précieusement) :**
+- Clé de signature : `android/sahtek-upload.keystore` (alias `sahtek`, valide
+  jusqu'en 2054, RSA 2048, SHA-256
+  `47:82:F0:A9:C4:6E:E8:54:63:7F:02:35:5A:74:7B:55:77:F3:50:BF:C9:1C:61:54:2B:75:5A:56:0A:94:A0:26`)
+- Identifiants : `android/keystore.properties` (mot de passe inclus — c'est ce
+  fichier qu'il faut sauvegarder **avec** la clé)
+- Lecture et branchement : `android/app/build.gradle`, qui teste la présence du
+  fichier. Sans lui (autre poste, intégration continue), le build release
+  fonctionne toujours mais produit un APK non signé, au lieu d'échouer.
 
-```bash
-keytool -genkey -v -keystore sahtek-upload.keystore -alias sahtek \
-  -keyalg RSA -keysize 2048 -validity 10000
-```
+Les deux fichiers sont hors de git (`*.keystore` et `android/keystore.properties`).
 
-> ⚠️ Perdre ce fichier interdit **définitivement** toute mise à jour de l'app
-> publiée. Sauvegarde-le hors du dépôt (il est déjà couvert par le
-> `.gitignore` via `*.keystore`).
+> ⚠️ Perdre la clé **ou** son mot de passe interdit **définitivement** toute mise
+> à jour de l'app déjà installée : Android refuse un APK signé avec une autre clé,
+> et les utilisateurs devraient désinstaller puis réinstaller. Sauvegarde les
+> deux fichiers hors de ce disque, dans un endroit chiffré.
+>
+> ⚠️ Ne publie **jamais** un APK debug à des utilisateurs : sa clé de debug est
+> jetable, donc il ne pourra jamais être mis à jour par un APK release.
 
-**b. Déclarer la signature** — créer `android/keystore.properties` (à ne pas
-committer) :
+Pour changer de mot de passe plus tard : `keytool -storepasswd` (et
+`-keypasswd` sur l'alias) puis mets à jour `keystore.properties`.
 
-```properties
-storeFile=../sahtek-upload.keystore
-storePassword=motdepasse
-keyAlias=sahtek
-keyPassword=motdepasse
-```
-
-puis dans `android/app/build.gradle`, avant `android { }` :
-
-```gradle
-def keystoreProps = new Properties()
-file("../keystore.properties").withInputStream { keystoreProps.load(it) }
-```
-
-et dans le bloc `android { }` :
-
-```gradle
-signingConfigs {
-    release {
-        storeFile file(keystoreProps['storeFile'])
-        storePassword keystoreProps['storePassword']
-        keyAlias keystoreProps['keyAlias']
-        keyPassword keystoreProps['keyPassword']
-    }
-}
-buildTypes {
-    release {
-        signingConfig signingConfigs.release
-        minifyEnabled false
-    }
-}
-```
-
-**c. Générer :**
+**Générer :**
 
 ```bash
 cd android
@@ -116,7 +118,11 @@ cd android
 ```
 
 Le **Play Store exige un `.aab`** (le `.apk` sert à installer à la main / au
-partage direct).
+partage direct). Pour distribuer l'APK depuis l'app elle-même, voir le §6.
+
+Une fois l'APK construit, `npm run publish:apk` le copie vers
+`public/downloads/sahtek.apk` : c'est le fichier que sert le bouton
+« Télécharger l'APK ».
 
 ---
 
@@ -173,11 +179,11 @@ d'installer une app hors Play Store.
 ### Hébergement par le site (le plus simple)
 
 ```bash
-# 1. Construire l'APK release (voir § 2)
+# 1. Construire l'APK release (voir § 2) — JAVA_HOME sur le JDK 21
 cd android && ./gradlew assembleRelease && cd ..
 
 # 2. Le copier là où le site le sert (nom imposé : c'est le href du bouton)
-cp android/app/build/outputs/apk/release/app-release.apk public/downloads/sahtek.apk
+npm run publish:apk
 
 # 3. Committer puis déployer — le fichier DOIT être versionné, sinon Vercel ne
 #    peut pas le servir. `.gitignore` ignore tous les *.apk, mais

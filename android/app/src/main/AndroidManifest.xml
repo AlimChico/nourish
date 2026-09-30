@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -49,4 +49,16 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <!--
+      Alarmes exactes : le plugin @capacitor/local-notifications les déclare, mais
+      Sahtek ne les utilise pas (ses rappels passent par `isExactNotification: false`,
+      donc setAndAllowWhileIdle). Google Play classe SCHEDULE_EXACT_ALARM parmi les
+      permissions à justification obligatoire : la garder alors qu'on ne s'en sert
+      pas expose à un refus de publication, et ouvre un accès « Alarmes et rappels »
+      dans les réglages système sans raison. Le code natif du plugin teste
+      `canScheduleExactAlarms()` avant tout appel exact : sans cette permission il
+      retombe proprement sur des alarmes inexactes, sans planter ni rien demander.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
 </manifest>

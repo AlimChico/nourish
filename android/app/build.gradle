@@ -1,5 +1,16 @@
 apply plugin: 'com.android.application'
 
+// Signature release : les identifiants vivent dans `android/keystore.properties`,
+// qui n'est JAMAIS versionné (ce fichier-ci l'est). Sans lui — autre poste, CI,
+// nouveau clone — le build release reste possible : il produit simplement un APK
+// non signé, au lieu d'échouer sur une clé manquante.
+def keystorePropsFile = rootProject.file("keystore.properties")
+def hasReleaseKey = keystorePropsFile.exists()
+def keystoreProps = new Properties()
+if (hasReleaseKey) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+
 android {
     namespace = "com.sahtek.calories"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -8,7 +19,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName "2.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +27,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseKey) {
+            release {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseKey) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
