@@ -11,26 +11,75 @@
 
 import { DatabaseSync } from "node:sqlite"
 import { createHash, randomBytes, scrypt as _scrypt, timingSafeEqual } from "node:crypto"
-import { promisify } from "node:util"
 import path from "node:path"
 import fs from "node:fs"
 
-const scrypt = promisify(_scrypt) as (p: string, s: string, k: number) => Promise<Buffer>
+/** Wrapper scrypt compatible Node 18–24+.
+ *
+ * Node `crypto.scrypt` ne prend pas (password, salt, N, R, P) en positionnel.
+ * Sa signature est :
+ *   scrypt(password, salt, keylen, options, callback)
+ *   où options = { N, R, P } et keylen = longueur du hash sortant (octets).
+ *
+ * Ce build Node n'expose pas la forme Promise (il lève sur tout appel sans
+ * callback explicite), donc on utilise toujours le mode callback enveloppé
+ * dans une Promise. Le hash sortant fait 64 octets (512 bits) — suffisant
+ * pour un sel+pwd dérivé.
+ */
+const SCRYPT_KEYLEN = 64
+
+async function scryptAsync(password: string, salt: string, N: number, R: number, P: number): Promise<Buffer> {
+  const opts = { N, R, P }
+  return new Promise((resolve, reject) => {
+    _scrypt(password, salt, SCRYPT_KEYLEN, opts, (err, derivedKey) => {
+      if (err) reject(err)
+      else resolve(derivedKey)
+    })
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Password hashing (shared by both backends)
 // ---------------------------------------------------------------------------
 
+const SCRYPT_N = 2 ** 14 // 16 384 — coût équilibré sécurité/performance (ajuster en prod selon le CPU)
+const SCRYPT_R = 8
+const SCRYPT_P = 1
+
+/** Hacher un mot de passe avec scrypt (format: N:R:P:salt:hash) */
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex")
-  const hash = await scrypt(password, salt, 64)
-  return `${salt}:${hash.toString("hex")}`
+  const hash = await scryptAsync(password, salt, SCRYPT_N, SCRYPT_R, SCRYPT_P)
+  return `${SCRYPT_N}:${SCRYPT_R}:${SCRYPT_P}:${salt}:${hash.toString("hex")}`
 }
 
+/** Vérifier un mot de passe — supporte le format legacy (salt:hash) et le nouveau (N:R:P:salt:hash) */
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [salt, hex] = stored.split(":")
+  const parts = stored.split(":")
+  let N = SCRYPT_N
+  let R = SCRYPT_R
+  let P = SCRYPT_P
+  let salt: string
+  let hex: string
+
+  if (parts.length >= 5) {
+    // Format nouveau: N:R:P:salt:hash (5 parties)
+    [N, R, P, salt, hex] = parts
+    N = Math.max(1, parseInt(N, 10) || SCRYPT_N)
+    R = Math.max(1, parseInt(R, 10) || SCRYPT_R)
+    P = Math.max(1, parseInt(P, 10) || SCRYPT_P)
+  } else if (parts.length >= 2) {
+    // Format legacy: salt:hash (N=64, R=8, P=1 par défaut dans l'ancien code)
+    [salt, hex] = parts
+    N = 64
+    R = 8
+    P = 1
+  } else {
+    return false
+  }
+
   if (!salt || !hex) return false
-  const hash = await scrypt(password, salt, 64)
+  const hash = await scryptAsync(password, salt, N, R, P)
   const storedBuf = Buffer.from(hex, "hex")
   return hash.length === storedBuf.length && timingSafeEqual(hash, storedBuf)
 }
@@ -390,6 +439,21 @@ export const db = {
     for (const t of tables) sqlite!.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(userId)
   },
 
+  /** Supprimer les sessions orphelines (sessions dont le user_id n'existe plus). */
+  async purgeOrphanedSessions(): Promise<number> {
+    if (usingPostgres) {
+      const res = await sql`
+        DELETE FROM sessions
+        WHERE user_id NOT IN (SELECT id FROM users)
+      `
+      return Number(res.length) // ne compte pas les lignes supprimées avec postgres
+    }
+    const before = sqlite!.prepare("SELECT COUNT(*) AS n FROM sessions").get() as { n: number }
+    sqlite!.prepare(`DELETE FROM sessions WHERE user_id NOT IN (SELECT id FROM users)`).run()
+    const after = sqlite!.prepare("SELECT COUNT(*) AS n FROM sessions").get() as { n: number }
+    return Number(before.n) - Number(after.n)
+  },
+
   async getSessionUser(tokenHash: string): Promise<SessionUser | null> {
     const now = Date.now()
     if (usingPostgres) {
@@ -404,6 +468,23 @@ export const db = {
       )
       .get(tokenHash, now) as SessionUser | undefined
     return row ?? null
+  },
+
+  // Compter les sessions actives (utilisé par adminOverview)
+  async countActiveSessions(): Promise<number> {
+    const now = Date.now()
+    if (usingPostgres) {
+      const rows = (await sql`SELECT COUNT(*)::int AS n FROM sessions WHERE expires_at > ${now}`) as unknown as { n: number }[]
+      return rows[0]?.n ?? 0
+    }
+    const row = sqlite!.prepare("SELECT COUNT(*) AS n FROM sessions WHERE expires_at > ?").get(now) as { n: number }
+    return Number(row.n)
+  },
+
+  // Purger les sessions expirées + orphelines (appelé au login)
+  async cleanupSessions(): Promise<void> {
+    await purgeExpiredSessions()
+    await purgeOrphanedSessions()
   },
 
   async insertSession(tokenHash: string, userId: string, expiresAt: number): Promise<void> {
@@ -947,7 +1028,8 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex")
 }
 
-export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30 // 30 days
+export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7 // 7 jours — durée raisonnable, rotation fréquente
+const SESSION_MAX_LIFE_MS = 1000 * 60 * 60 * 24 * 30 // 30 j max absolu (même avec rotation)
 export const SESSION_COOKIE = "nourish_session"
 
 /** Delete expired sessions so the table stays bounded (runs on each new login). */
@@ -968,10 +1050,30 @@ export function safeEqualStrings(a: string, b: string): boolean {
   return timingSafeEqual(ha, hb)
 }
 
-export async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
+export async function createSession(userId: string, existingToken?: string): Promise<{ token: string; expiresAt: Date }> {
   await purgeExpiredSessions()
-  const token = randomBytes(32).toString("base64url")
-  const expiresAt = Date.now() + SESSION_TTL_MS
+  // Rotation du token si on fournit un token existant (évite la fixation de session)
+  const now = Date.now()
+  let token: string
+  let expiresAt: number
+  if (existingToken) {
+    const existing = await db.getSessionUser(hashToken(existingToken))
+    if (existing?.id === userId) {
+      // Réutiliser l'ID de session existant mais en régénérer le token (rotation)
+      token = randomBytes(32).toString("base64url")
+      const sessionRow = usingPostgres
+        ? (await sql`SELECT expires_at FROM sessions WHERE token_hash = ${hashToken(existingToken)} LIMIT 1`)[0]
+        : (sqlite!.prepare("SELECT expires_at FROM sessions WHERE token_hash = ?").get(hashToken(existingToken)) as { expires_at: number } | undefined)
+      const existingExpiry = sessionRow?.expires_at ?? now
+      const maxExpiry = Math.min(existingExpiry + SESSION_TTL_MS, now + SESSION_MAX_LIFE_MS)
+      expiresAt = Math.max(now + SESSION_TTL_MS, maxExpiry)
+      await db.destroySession(hashToken(existingToken))
+      await db.insertSession(hashToken(token), userId, expiresAt)
+      return { token, expiresAt: new Date(expiresAt) }
+    }
+  }
+  token = randomBytes(32).toString("base64url")
+  expiresAt = now + SESSION_TTL_MS
   await db.insertSession(hashToken(token), userId, expiresAt)
   return { token, expiresAt: new Date(expiresAt) }
 }
@@ -1004,6 +1106,48 @@ export function rateLimit(key: string, limit: number, windowMs: number): { ok: b
   }
   b.count += 1
   return b.count > limit ? { ok: false, retryAfter: Math.ceil((b.resetAt - now) / 1000) } : { ok: true }
+}
+
+/**
+ * Lire le body d'une requête avec une limite de taille stricte (protection DoS).
+ * Rejette les payloads > maxBytes avant de parser le JSON.
+ */
+export async function readBodyWithLimit(request: Request, maxBytes = 500_000): Promise<{ ok: boolean; data: unknown; error?: string }> {
+  const contentLength = request.headers.get("content-length")
+  if (contentLength && parseInt(contentLength, 10) > maxBytes) {
+    return { ok: false, data: null, error: "Payload too large" }
+  }
+  try {
+    const chunks: Uint8Array[] = []
+    let total = 0
+    const reader = request.body!.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) {
+        total += value.byteLength
+        if (total > maxBytes) {
+          reader.cancel()
+          return { ok: false, data: null, error: "Payload too large" }
+        }
+        chunks.push(value)
+      }
+    }
+    const buffer = new Uint8Array(total)
+    let offset = 0
+    for (const c of chunks) {
+      buffer.set(c, offset)
+      offset += c.byteLength
+    }
+    const text = Buffer.from(buffer).toString("utf-8")
+    try {
+      return { ok: true, data: JSON.parse(text) }
+    } catch {
+      return { ok: false, data: null, error: "Invalid JSON" }
+    }
+  } catch {
+    return { ok: false, data: null, error: "Request read failed" }
+  }
 }
 
 export function clientIp(request: Request): string {

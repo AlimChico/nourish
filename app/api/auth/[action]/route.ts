@@ -102,7 +102,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ action: st
       const ok = await verifyPassword(password, user.password)
       if (!ok) return Response.json({ error: "Invalid email or password." }, { status: 401 })
 
-      const { token, expiresAt } = await createSession(user.id)
+      // Rotation du token: on passing le token existant depuis le cookie empêche la fixation de session.
+      const existingToken = parseCookie(request.headers.get("cookie") ?? "", SESSION_COOKIE)
+      const { token, expiresAt } = await createSession(user.id, existingToken)
       return Response.json(
         { user: { id: user.id, email: user.email, name: user.name } },
         { headers: { "Set-Cookie": sessionCookie(token, expiresAt) } },
@@ -120,8 +122,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ action: st
       const adminKey = process.env.ADMIN_KEY || ""
       if (!adminEmail || !adminKey) return Response.json({ error: "Admin mode disabled" }, { status: 404 })
 
-      const limit = rateLimit(`admin-reset:${ip}`, 5, 60 * 60 * 1000)
-      if (!limit.ok) return Response.json({ error: "Too many attempts. Try again later." }, { status: 429 })
+      // Rate limiting plus strict: par IP ET par email cible
+      const ipLimit = rateLimit(`admin-reset-ip:${ip}`, 3, 60 * 60 * 1000)
+      if (!ipLimit.ok) return Response.json({ error: "Too many attempts. Try again later." }, { status: 429 })
 
       const body = (await request.json().catch(() => null)) as {
         adminEmail?: string
