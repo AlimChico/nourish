@@ -21,6 +21,8 @@ import {
 import { useFoodLog, type FoodItem, type MealKey } from "@/lib/food-log"
 import {
   analyzeMealReal,
+  itemBaseGrams,
+  itemMacrosAt,
   makeScanThumbnail,
   ScanError,
   targetForTime,
@@ -32,6 +34,10 @@ import { mealMeta } from "@/lib/food-log"
 import { cn } from "@/lib/utils"
 
 type Phase = "capture" | "analyzing" | "review" | "nofood" | "unavailable"
+
+/** Pas du réglage +/- de la portion, en grammes. */
+const GRAM_STEP = 10
+const MAX_GRAMS = 3000
 
 /** Message affiché quand le scanner ne marche pas — un cas par cause réelle. */
 const FAILURE_COPY: Record<ScanErrorKind, { title: string; body: string }> = {
@@ -64,6 +70,8 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<ScanResult | null>(null)
   const [kept, setKept] = useState<Record<number, boolean>>({})
   const [qtys, setQtys] = useState<Record<number, number>>({})
+  // Grammes par item — pré-rempli avec l'estimation du scanner, corrigeable.
+  const [grams, setGrams] = useState<Record<number, number>>({})
   const [thumbnail, setThumbnail] = useState<string | undefined>(undefined)
   // Miniature persistable : c'est elle qui reste sur le dashboard après « Log ».
   const [scanPhoto, setScanPhoto] = useState<string | undefined>(undefined)
@@ -186,6 +194,7 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
       setResult(r)
       setKept(Object.fromEntries(r.items.map((_, i) => [i, true])))
       setQtys(Object.fromEntries(r.items.map((_, i) => [i, r.items[i].quantity])))
+      setGrams(Object.fromEntries(r.items.map((_, i) => [i, itemBaseGrams(r.items[i])])))
       setPhase("review")
     } catch (err) {
       if (err instanceof ScanError) {
@@ -223,19 +232,43 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
     ? result.items.filter((_, i) => kept[i] !== false)
     : []
 
+  // Totaux recalculés en direct à partir des grammes saisis par l'utilisateur
+  // (et non plus du seul poids deviné par le scanner).
+  const totals = result
+    ? result.items.reduce(
+        (acc, it, i) => {
+          if (kept[i] === false) return acc
+          const m = itemMacrosAt(it, grams[i] ?? it.grams, qtys[i] ?? it.quantity)
+          return {
+            calories: acc.calories + m.calories,
+            protein: acc.protein + m.protein,
+            carbs: acc.carbs + m.carbs,
+            fat: acc.fat + m.fat,
+          }
+        },
+        { calories: 0, protein: 0, carbs: 0, fat: 0 },
+      )
+    : { calories: 0, protein: 0, carbs: 0, fat: 0 }
+
   const saveAll = useCallback(() => {
     if (!result) return
     for (const it of activeItems) {
       const idx = result.items.indexOf(it)
       const qty = qtys[idx] ?? it.quantity
+      const g = Math.round(grams[idx] ?? itemBaseGrams(it))
+      // Macros pour le poids réellement saisi (×qty à l'enregistrement).
+      const m = itemMacrosAt(it, g, 1)
+      // Le libellé garde l'estimation du scanner tant que l'utilisateur n'a pas
+      // changé le poids ; sinon on affiche le poids choisi (une seule fois ×qty).
+      const edited = g !== itemBaseGrams(it)
       const food: FoodItem = {
         id: `scan_${it.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
-        name: `${it.name} (${it.portion})`,
-        serving: it.portion,
-        calories: Math.round(it.calories),
-        protein: Math.round(it.protein),
-        carbs: Math.round(it.carbs),
-        fat: Math.round(it.fat),
+        name: `${it.name} (${edited ? `${g} g` : it.portion})`,
+        serving: edited ? `${g} g` : it.portion,
+        calories: Math.round(m.calories),
+        protein: Math.round(m.protein),
+        carbs: Math.round(m.carbs),
+        fat: Math.round(m.fat),
         emoji: foodEmoji(it.name),
         // La photo du plat suit le plat enregistré : elle réapparaît sur le
         // dashboard (aujourd'hui) à côté des calories et des macros.
@@ -245,7 +278,7 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
       addFood(meal, food, qty)
     }
     onClose()
-  }, [result, activeItems, qtys, meal, addFood, onClose, scanPhoto])
+  }, [result, activeItems, qtys, grams, meal, addFood, onClose, scanPhoto])
 
   return (
     <div className="safe-top absolute inset-0 z-30 flex flex-col bg-background aurora-glow animate-slide-up">
@@ -525,13 +558,15 @@ export function ScanMealScreen({ onClose }: { onClose: () => void }) {
                   item={it}
                   kept={kept[i] !== false}
                   qty={qtys[i] ?? it.quantity}
+                  grams={grams[i] ?? itemBaseGrams(it)}
                   onToggle={() => setKept((k) => ({ ...k, [i]: !(k[i] !== false) }))}
                   onQty={(q) => setQtys((s) => ({ ...s, [i]: q }))}
+                  onGrams={(g) => setGrams((s) => ({ ...s, [i]: g }))}
                 />
               ))}
             </div>
 
-            {result && activeItems.length > 0 && <TotalsCard items={activeItems} />}
+            {result && activeItems.length > 0 && <TotalsCard totals={totals} />}
 
             {result?.tips && (
               <div className="mt-4 flex items-start gap-2.5 rounded-2xl bg-accent p-4">
@@ -601,17 +636,31 @@ function DetectedRow({
   item,
   kept,
   qty,
+  grams,
   onToggle,
   onQty,
+  onGrams,
 }: {
   item: ScannedItem
   kept: boolean
   qty: number
+  grams: number
   onToggle: () => void
   onQty: (q: number) => void
+  onGrams: (g: number) => void
 }) {
-  const kcal = Math.round(item.calories * qty)
-  const confPct = Math.round(item.confidence * 100)
+  // Champ de saisie local pour pouvoir effacer/réécrire pendant la frappe
+  // (l'état parent reste numérique et clampé).
+  const [gramsText, setGramsText] = useState(String(grams))
+  useEffect(() => {
+    setGramsText(String(grams))
+  }, [grams])
+  const macros = itemMacrosAt(item, grams, qty)
+  const base = itemBaseGrams(item)
+  const kcal = Math.round(macros.calories)
+  // Le modèle renvoie high / medium / low : on l'affiche tel quel (couleur
+  // dérivée du niveau) plutôt qu'un pourcentage trompeur.
+  const confLevel = item.confidence >= 0.8 ? "high" : item.confidence >= 0.6 ? "medium" : "low"
   const confColor =
     item.confidence >= 0.8 ? "text-steps" : item.confidence >= 0.6 ? "text-carbs" : "text-muted-foreground"
 
@@ -631,48 +680,91 @@ function DetectedRow({
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="text-xs font-semibold text-muted-foreground">{item.portion}</span>
             <span className="text-xs text-muted-foreground">·</span>
-            <span className={cn("text-xs font-bold", confColor)}>{confPct}% sure</span>
+            <span className={cn("text-xs font-bold capitalize", confColor)}>{confLevel} confidence</span>
             <span className="text-xs text-muted-foreground">·</span>
             <span className="text-xs font-bold tabular-nums">{kcal} kcal</span>
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={kept ? `Exclude ${item.name}` : `Include ${item.name}`}
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
+            kept ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+          )}
+        >
+          <Check className="h-4 w-4" strokeWidth={3} />
+        </button>
+      </div>
+
+      {/* Poids de la portion : estimation du scanner, corrigeable au gramme. */}
+      <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-muted/60 px-2.5 py-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => onQty(Math.max(1, qty - 1))}
-            aria-label={`Decrease ${item.name} quantity`}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted active:scale-90 sm:h-9 sm:w-9"
+            onClick={() => onGrams(Math.max(1, grams - GRAM_STEP))}
+            aria-label={`Reduce ${item.name} portion`}
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-card active:scale-90"
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
-          <span className="w-6 text-center text-sm font-extrabold tabular-nums">{qty}</span>
+          <div className="flex items-baseline gap-1">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={gramsText}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/[^0-9]/g, "").slice(0, 4)
+                setGramsText(digits)
+                const n = parseInt(digits, 10)
+                if (Number.isFinite(n) && n > 0) onGrams(Math.min(MAX_GRAMS, n))
+              }}
+              onBlur={() => setGramsText(String(grams))}
+              aria-label={`${item.name} weight in grams`}
+              className="w-14 rounded-lg bg-card px-2 py-1 text-center text-sm font-extrabold tabular-nums outline-none ring-primary focus:ring-2"
+            />
+            <span className="text-xs font-bold text-muted-foreground">g</span>
+          </div>
           <button
             type="button"
-            onClick={() => onQty(Math.min(9, qty + 1))}
-            aria-label={`Increase ${item.name} quantity`}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-primary active:scale-90 sm:h-9 sm:w-9"
+            onClick={() => onGrams(Math.min(MAX_GRAMS, grams + GRAM_STEP))}
+            aria-label={`Increase ${item.name} portion`}
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-primary active:scale-90"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-bold text-muted-foreground">
+            {grams !== base ? `AI: ${base} g` : "Portion"}
+          </span>
           <button
             type="button"
-            onClick={onToggle}
-            aria-label={kept ? `Exclude ${item.name}` : `Include ${item.name}`}
-            className={cn(
-              "ml-1 flex h-8 w-8 items-center justify-center rounded-full transition-colors sm:h-9 sm:w-9",
-              kept ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-            )}
+            onClick={() => onQty(Math.max(1, qty - 1))}
+            aria-label={`Decrease ${item.name} servings`}
+            className="flex h-7 w-7 items-center justify-center rounded-lg bg-card active:scale-90"
           >
-            <Check className="h-4 w-4" strokeWidth={3} />
+            <Minus className="h-3 w-3" />
+          </button>
+          <span className="w-4 text-center text-xs font-extrabold tabular-nums">×{qty}</span>
+          <button
+            type="button"
+            onClick={() => onQty(Math.min(9, qty + 1))}
+            aria-label={`Increase ${item.name} servings`}
+            className="flex h-7 w-7 items-center justify-center rounded-lg bg-card active:scale-90"
+          >
+            <Plus className="h-3 w-3" />
           </button>
         </div>
       </div>
 
-      {/* Macro mini-row */}
+      {/* Macro mini-row — recalculée depuis le poids saisi */}
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <MacroChip label="P" value={Math.round(item.protein * qty)} className="bg-protein-soft text-protein" />
-        <MacroChip label="C" value={Math.round(item.carbs * qty)} className="bg-carbs-soft text-carbs" />
-        <MacroChip label="F" value={Math.round(item.fat * qty)} className="bg-fat-soft text-fat" />
+        <MacroChip label="P" value={Math.round(macros.protein)} className="bg-protein-soft text-protein" />
+        <MacroChip label="C" value={Math.round(macros.carbs)} className="bg-carbs-soft text-carbs" />
+        <MacroChip label="F" value={Math.round(macros.fat)} className="bg-fat-soft text-fat" />
       </div>
 
       {/* What the AI actually saw */}
@@ -695,16 +787,8 @@ function MacroChip({ label, value, className }: { label: string; value: number; 
   )
 }
 
-function TotalsCard({ items }: { items: ScannedItem[] }) {
-  const t = items.reduce(
-    (acc, it) => ({
-      calories: acc.calories + it.calories * it.quantity,
-      protein: acc.protein + it.protein * it.quantity,
-      carbs: acc.carbs + it.carbs * it.quantity,
-      fat: acc.fat + it.fat * it.quantity,
-    }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 },
-  )
+function TotalsCard({ totals }: { totals: { calories: number; protein: number; carbs: number; fat: number } }) {
+  const t = totals
   return (
     <div className="mt-4 grid grid-cols-4 gap-2 rounded-2xl bg-secondary p-4 text-secondary-foreground">
       <Total label="kcal" value={Math.round(t.calories)} accent />

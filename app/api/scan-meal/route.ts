@@ -5,6 +5,7 @@ import { rateLimit, clientIp } from "@/lib/server/db"
 type DetectedFood = {
   name: string
   portion: string
+  grams: number
   quantity: number
   calories: number
   protein: number
@@ -35,7 +36,18 @@ function scanError(code: ScanErrorCode, message: string, status: number) {
   return Response.json({ error: code, message } satisfies { error: ScanErrorCode; message: string }, { status })
 }
 
-const SYSTEM_PROMPT = `You are a nutrition vision expert specialized in TUNISIAN cuisine 🇹🇳. Analyze the meal photo and identify EVERY food you can see.
+const SYSTEM_PROMPT = `Tu es un expert en nutrition, spécialisé en cuisine TUNISIENNE et méditerranéenne 🇹🇳. Analyse la photo du repas et identifie CHAQUE aliment visible.
+
+Pour chaque aliment, donne :
+- name : le nom du plat ou aliment, en FRANÇAIS (garde le nom LOCAL des plats tunisiens : "Lablabi", "Kafteji", "Mloukhia"…)
+- grams : le poids estimé de la portion, en GRAMMES (un NOMBRE précis — jamais "environ" ni une fourchette)
+- portion : la portion en clair, ex. "1 bol (450 g)"
+- quantity : le nombre de portions mangées (souvent 1)
+- calories / protein / carbs / fat : des NOMBRES pour cette portion (kcal et grammes) — calcule-les précisément à partir des valeurs de référence ci-dessous, pas d'approximation
+- confidence : exactement "high", "medium" ou "low"
+- detail : ce que tu vois réellement (couleur, cuisson, ingrédients visibles)
+
+REPÈRES DE TAILLE (indispensable pour un poids précis) : utilise les objets visibles autour du plat — assiette standard (~26 cm), couverts, verre (~200 ml), main, téléphone — pour calibrer la taille réelle de la portion et donner des grammes réalistes.
 
 === TUNISIAN DISH REFERENCE (use the LOCAL name + these realistic calories) ===
 STEWS & MAIN DISHES (mar9a / plats)
@@ -78,32 +90,34 @@ If a label or brand is visible (Dehia, Sama, Délice Danone, Natilait, Vikar, Bo
 bread slice = 60 g · bowl = 350-450 g (lablabi, chorba) · main plate = 350-400 g · brik/fricassé = 1 piece · couscous plate = 350 g · tablespoon of oil/harissa = 15-20 g.
 If a cooked Tunisian dish is visible, use the reference above instead of guessing generic values — and always give its LOCAL name (e.g. "Lablabi", "Kafteji", "Mloukhia"). Say if it is homemade or restaurant-style when visible (restaurant portions are bigger and oilier: +15-20%).
 
-Respond with ONLY a valid JSON object (no markdown, no code fences) in this exact shape:
+Réponds UNIQUEMENT avec un JSON valide, sans texte autour, exactement de cette forme :
 {
-  "dish": "short dish name, e.g. 'Lablabi with a soft egg'",
-  "description": "1-2 sentence description of the meal as pictured",
+  "dish": "nom court du plat, ex. 'Lablabi avec un œuf mollet'",
+  "description": "1-2 phrases décrivant le repas tel qu'il est photographié",
   "items": [
     {
-      "name": "food name",
-      "portion": "estimated portion, e.g. '1 bowl (450 g)'",
+      "name": "nom de l'aliment, en français",
+      "grams": 450,
+      "portion": "ex. '1 bol (450 g)'",
       "quantity": 1,
       "calories": 450,
       "protein": 20,
       "carbs": 68,
       "fat": 18,
-      "confidence": 0.92,
-      "detail": "what you actually see for this item: color, cooking method, visible ingredients"
+      "confidence": "high",
+      "detail": "ce que tu vois réellement pour cet aliment : couleur, cuisson, ingrédients visibles"
     }
   ],
-  "tips": "one short nutrition tip about this meal"
+  "tips": "un court conseil nutrition sur ce repas"
 }
 
-Rules:
-- calories/protein/carbs/fat are NUMBERS for the estimated portion (kcal and grams).
-- confidence is 0..1.
-- quantity is how many servings the user likely ate (usually 1).
-- Identify every distinct visible food item, including oils/sauces you can infer.
-- If the image contains no food at all, return "items": [] and explain in description. NEVER invent a dish.`
+Règles :
+- grams DOIT être un nombre (le poids réel de la portion en grammes) — utilise l'assiette et les couverts comme repère de taille.
+- calories/protein/carbs/fat sont des NOMBRES pour cette portion (kcal et grammes) : valeurs de référence tunisiiennes ci-dessus, ajustées au poids estimé. Calcule, n'approxime pas.
+- confidence vaut exactement "high", "medium" ou "low".
+- quantity = nombre de portions que la personne a mangées (souvent 1).
+- Identifie CHAQUE aliment distinct visible, y compris les huiles/sauces que tu peux déduire.
+- Si l'image ne contient aucun aliment, renvoie "items": [] et explique-le dans description. N'invente JAMAIS de plat.`
 
 function extractJson(text: string): unknown {
   const cleaned = text.replace(/```json|```/g, "").trim()
@@ -113,21 +127,57 @@ function extractJson(text: string): unknown {
   return JSON.parse(cleaned.slice(start, end + 1))
 }
 
+/**
+ * Le modèle renvoie la confiance en "high"/"medium"/"low" (nouveau contrat).
+ * On la ramène sur une échelle 0..1 pour l'affichage, tout en acceptant encore
+ * les nombres (anciens modèles / petits modèles qui renvoient 0.9).
+ */
+function normalizeConfidence(v: unknown): number {
+  if (typeof v === "number" && isFinite(v)) {
+    const n = v > 1 ? v / 100 : v
+    return Math.min(1, Math.max(0.3, n))
+  }
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase()
+    if (s.startsWith("high") || s === "haute" || s === "élevée") return 0.92
+    if (s.startsWith("med") || s === "moyenne") return 0.7
+    if (s.startsWith("low") || s === "faible" || s === "basse") return 0.5
+    const n = parseFloat(s)
+    if (isFinite(n)) return Math.min(1, Math.max(0.3, n > 1 ? n / 100 : n))
+  }
+  return 0.75
+}
+
+/** Récupère un poids (g) depuis le texte de portion, ex. "1 bol (450 g)". */
+function gramsFromPortion(portion: string): number {
+  const m = /(\d+(?:[.,]\d+)?)\s*(?:g|grammes?|ml)\b/i.exec(portion)
+  if (!m) return 0
+  const n = parseFloat(m[1].replace(",", "."))
+  return isFinite(n) && n > 0 ? Math.min(5000, Math.round(n)) : 0
+}
+
 function normalizeItem(raw: unknown): DetectedFood | null {
   if (!raw || typeof raw !== "object") return null
   const r = raw as Record<string, unknown>
   const name = typeof r.name === "string" ? r.name.trim() : ""
   if (!name) return null
   const num = (v: unknown, fb = 0) => (typeof v === "number" && isFinite(v) ? Math.max(0, Math.round(v)) : fb)
+  const portion = typeof r.portion === "string" && r.portion.trim() ? r.portion.trim() : "1 serving"
+  // Poids de la portion : valeur explicite du modèle, sinon extraite du texte.
+  const grams =
+    typeof r.grams === "number" && isFinite(r.grams) && r.grams > 0
+      ? Math.min(5000, Math.round(r.grams))
+      : gramsFromPortion(portion)
   return {
     name,
-    portion: typeof r.portion === "string" && r.portion.trim() ? r.portion.trim() : "1 serving",
+    portion,
+    grams,
     quantity: typeof r.quantity === "number" && r.quantity > 0 ? Math.min(9, Math.round(r.quantity)) : 1,
     calories: num(r.calories),
     protein: num(r.protein),
     carbs: num(r.carbs),
     fat: num(r.fat),
-    confidence: typeof r.confidence === "number" ? Math.min(1, Math.max(0.3, r.confidence)) : 0.75,
+    confidence: normalizeConfidence(r.confidence),
     detail: typeof r.detail === "string" ? r.detail.trim() : "",
   }
 }
@@ -138,7 +188,12 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash"
  * Modèle de secours si le principal est surchargé (503 high demand) :
  * gemini-flash-lite répond presque toujours, qualité suffisante pour l'analyse.
  */
-const GEMINI_FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-2.5-flash-lite"]
+const GEMINI_FALLBACK_MODELS = [
+  "gemini-flash-lite-latest",
+  "gemini-2.5-flash-lite",
+  "gemini-flash-latest",
+  "gemini-2.5-flash",
+]
 
 async function geminiGenerate(geminiKey: string, model: string, body: unknown): Promise<Response> {
   return fetch(
@@ -225,11 +280,15 @@ async function scanWithGemini(geminiKey: string, mediaType: string, base64: stri
   // Essaie le modèle principal, puis les fallbacks en cas de 503 (surcharge)
   // ou 429 (quota) — la dispo des modèles Gemini varie heure par heure.
   let res = await geminiGenerate(geminiKey, GEMINI_MODEL, buildBody())
-  if ((res.status === 503 || res.status === 429) && !process.env.GEMINI_MODEL) {
+  // 503/429 = modèle surchargé ; 404 = modèle inexistant/retiré (nom par défaut
+  // périmé). Dans les deux cas on bascule sur un modèle disponible — c'est ce
+  // qui fait que le scanner répond au lieu d'échouer.
+  const retryable = (s: number) => s === 503 || s === 429 || s === 404
+  if (retryable(res.status) && !process.env.GEMINI_MODEL) {
     for (const fallback of GEMINI_FALLBACK_MODELS) {
-      console.warn("gemini model busy (" + res.status + "), trying fallback:", fallback)
+      console.warn("gemini model unavailable (" + res.status + "), trying fallback:", fallback)
       res = await geminiGenerate(geminiKey, fallback, buildBody())
-      if (res.ok || (res.status !== 503 && res.status !== 429)) break
+      if (res.ok || !retryable(res.status)) break
     }
   }
 

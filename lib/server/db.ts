@@ -64,10 +64,12 @@ export async function verifyPassword(password: string, stored: string): Promise<
 
   if (parts.length >= 5) {
     // Format nouveau: N:R:P:salt:hash (5 parties)
-    [N, R, P, salt, hex] = parts
-    N = Math.max(1, parseInt(N, 10) || SCRYPT_N)
-    R = Math.max(1, parseInt(R, 10) || SCRYPT_R)
-    P = Math.max(1, parseInt(P, 10) || SCRYPT_P)
+    const [nRaw, rRaw, pRaw, saltPart, hexPart] = parts
+    N = Math.max(1, parseInt(nRaw ?? "", 10) || SCRYPT_N)
+    R = Math.max(1, parseInt(rRaw ?? "", 10) || SCRYPT_R)
+    P = Math.max(1, parseInt(pRaw ?? "", 10) || SCRYPT_P)
+    salt = saltPart ?? ""
+    hex = hexPart ?? ""
   } else if (parts.length >= 2) {
     // Format legacy: salt:hash (N=64, R=8, P=1 par défaut dans l'ancien code)
     [salt, hex] = parts
@@ -390,6 +392,22 @@ export const db = {
     return row ?? null
   },
 
+  async findUserById(id: string): Promise<{ id: string; email: string; name: string; password: string } | null> {
+    if (usingPostgres) {
+      const rows = (await sql`SELECT id, email, name, password FROM users WHERE id = ${id} LIMIT 1`) as unknown as {
+        id: string
+        email: string
+        name: string
+        password: string
+      }[]
+      return rows[0] ?? null
+    }
+    const row = sqlite!.prepare("SELECT id, email, name, password FROM users WHERE id = ?").get(id) as
+      | { id: string; email: string; name: string; password: string }
+      | undefined
+    return row ?? null
+  },
+
   async insertUser(id: string, email: string, name: string, passwordHash: string): Promise<void> {
     const now = Date.now()
     if (usingPostgres) {
@@ -397,6 +415,15 @@ export const db = {
       return
     }
     sqlite!.prepare("INSERT INTO users (id, email, name, password, created_at) VALUES (?, ?, ?, ?, ?)").run(id, email, name, passwordHash, now)
+  },
+
+  /** Supprimer un utilisateur (ses sessions et données liées partent en cascade). */
+  async deleteUser(userId: string): Promise<void> {
+    if (usingPostgres) {
+      await sql`DELETE FROM users WHERE id = ${userId}`
+      return
+    }
+    sqlite!.prepare("DELETE FROM users WHERE id = ?").run(userId)
   },
 
   async deleteAllSessions(userId: string): Promise<void> {
@@ -415,14 +442,7 @@ export const db = {
     sqlite!.prepare("UPDATE users SET password = ? WHERE id = ?").run(passwordHash, userId)
   },
 
-  async deleteUser(userId: string): Promise<void> {
-    if (usingPostgres) {
-      await sql`DELETE FROM users WHERE id = ${userId}`
-      return
-    }
-    sqlite!.prepare("DELETE FROM users WHERE id = ?").run(userId)
-  },
-
+  // Supprimer les données d'un utilisateur (compte, journaux, scans, santé…).
   async clearUserData(userId: string): Promise<void> {
     const tables = ["account", "day_logs", "scans", "events", "health", "weight"] as const
     if (usingPostgres) {
@@ -484,7 +504,7 @@ export const db = {
   // Purger les sessions expirées + orphelines (appelé au login)
   async cleanupSessions(): Promise<void> {
     await purgeExpiredSessions()
-    await purgeOrphanedSessions()
+    await this.purgeOrphanedSessions()
   },
 
   async insertSession(tokenHash: string, userId: string, expiresAt: number): Promise<void> {
@@ -1064,7 +1084,7 @@ export async function createSession(userId: string, existingToken?: string): Pro
       const sessionRow = usingPostgres
         ? (await sql`SELECT expires_at FROM sessions WHERE token_hash = ${hashToken(existingToken)} LIMIT 1`)[0]
         : (sqlite!.prepare("SELECT expires_at FROM sessions WHERE token_hash = ?").get(hashToken(existingToken)) as { expires_at: number } | undefined)
-      const existingExpiry = sessionRow?.expires_at ?? now
+      const existingExpiry = Number((sessionRow as { expires_at?: number } | undefined)?.expires_at ?? now)
       const maxExpiry = Math.min(existingExpiry + SESSION_TTL_MS, now + SESSION_MAX_LIFE_MS)
       expiresAt = Math.max(now + SESSION_TTL_MS, maxExpiry)
       await db.destroySession(hashToken(existingToken))

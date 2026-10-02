@@ -5,6 +5,8 @@ import type { MealKey } from "@/lib/food-log"
 export type ScannedItem = {
   name: string
   portion: string
+  /** Poids estimé par le scanner pour CET item (base du calcul des macros). */
+  grams: number
   quantity: number
   calories: number
   protein: number
@@ -157,14 +159,45 @@ export async function makeScanThumbnail(
   }
 }
 
-export function scanTotals(items: ScannedItem[]) {
+/** Grammage de référence d'un item : l'estimation du scanner (jamais 0). */
+export function itemBaseGrams(item: ScannedItem): number {
+  return item.grams > 0 ? Math.round(item.grams) : 100
+}
+
+/**
+ * Macros d'un item pour un grammage donné. Le scanner renvoie les macros pour
+ * SON estimation de portion : si l'utilisateur corrige le poids (combien de
+ * grammes il a vraiment mangé), on met les macros à l'échelle proportionnellement.
+ * `quantity` = nombre de portions.
+ */
+export function itemMacrosAt(item: ScannedItem, grams?: number, quantity = 1) {
+  const base = itemBaseGrams(item)
+  const g = grams && grams > 0 ? grams : base
+  const factor = (g / base) * (quantity > 0 ? quantity : 1)
+  return {
+    calories: item.calories * factor,
+    protein: item.protein * factor,
+    carbs: item.carbs * factor,
+    fat: item.fat * factor,
+  }
+}
+
+/**
+ * Totaux d'une liste d'items, en tenant compte des grammes saisis par
+ * l'utilisateur (`grams[index]`) — `scanTotals(items)` sans map garde
+ * l'estimation du scanner.
+ */
+export function scanTotals(items: ScannedItem[], grams: Record<number, number> = {}) {
   return items.reduce(
-    (acc, it) => ({
-      calories: acc.calories + it.calories * it.quantity,
-      protein: acc.protein + it.protein * it.quantity,
-      carbs: acc.carbs + it.carbs * it.quantity,
-      fat: acc.fat + it.fat * it.quantity,
-    }),
+    (acc, it, i) => {
+      const m = itemMacrosAt(it, grams[i] ?? it.grams, it.quantity)
+      return {
+        calories: acc.calories + m.calories,
+        protein: acc.protein + m.protein,
+        carbs: acc.carbs + m.carbs,
+        fat: acc.fat + m.fat,
+      }
+    },
     { calories: 0, protein: 0, carbs: 0, fat: 0 },
   )
 }
