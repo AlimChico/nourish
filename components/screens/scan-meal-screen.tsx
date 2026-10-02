@@ -683,6 +683,12 @@ function DetectedRow({
             <span className={cn("text-xs font-bold capitalize", confColor)}>{confLevel} confidence</span>
             <span className="text-xs text-muted-foreground">·</span>
             <span className="text-xs font-bold tabular-nums">{kcal} kcal</span>
+            {item.source === "local" && (
+              <>
+                <span className="text-xs text-muted-foreground">·</span>
+                <span className="text-xs font-semibold text-steps">Base locale 🇹🇳</span>
+              </>
+            )}
           </div>
         </div>
         <button
@@ -766,6 +772,15 @@ function DetectedRow({
         <MacroChip label="C" value={Math.round(macros.carbs)} className="bg-carbs-soft text-carbs" />
         <MacroChip label="F" value={Math.round(macros.fat)} className="bg-fat-soft text-fat" />
       </div>
+
+      {/* Transparence de la source : valeurs de référence pour 100 g. */}
+      {item.per100 && (
+        <p className="mt-2 text-[11px] font-medium text-muted-foreground">
+          {item.reference ?? item.name} · réf. 100 g : {Math.round(item.per100.kcal)} kcal · P{" "}
+          {Math.round(item.per100.protein)}g · C {Math.round(item.per100.carbs)}g · F{" "}
+          {Math.round(item.per100.fat)}g
+        </p>
+      )}
 
       {/* What the AI actually saw */}
       {item.detail && (

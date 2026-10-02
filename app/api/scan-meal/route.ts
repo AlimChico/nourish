@@ -1,6 +1,7 @@
 export const maxDuration = 60
 
 import { rateLimit, clientIp } from "@/lib/server/db"
+import { macrosForGrams, matchTunisianFood100 } from "@/lib/tunisian-foods-100g"
 
 type DetectedFood = {
   name: string
@@ -13,6 +14,12 @@ type DetectedFood = {
   fat: number
   confidence: number
   detail: string
+  /** Valeurs locales de référence (pour 100 g) quand l'aliment est reconnu. */
+  per100?: { kcal: number; protein: number; carbs: number; fat: number }
+  /** Origine des valeurs : "local" (base tunisienne) ou "ai" (estimation modèle). */
+  source?: "local" | "ai"
+  /** Entrée locale utilisée, pour la traçabilité. */
+  reference?: string
 }
 
 type ScanResponse = {
@@ -182,6 +189,33 @@ function normalizeItem(raw: unknown): DetectedFood | null {
   }
 }
 
+/**
+ * PRIORITÉ À LA BASE LOCALE 🇹🇳 : dès que le nom reconnu correspond à une entrée
+ * de `lib/tunisian-foods-100g.ts`, on recalcule les calories et macros à partir
+ * des valeurs de référence pour 100 g × le poids de la portion. Le modèle ne
+ * sert plus qu'à reconnaître l'aliment et estimer son poids ; les chiffres ne
+ * dépendent plus de son approximation. Sans correspondance, on garde ses valeurs.
+ */
+function applyLocalReference(items: DetectedFood[]): DetectedFood[] {
+  return items.map((item) => {
+    // Poids inutilisable : on ne peut pas appliquer une base « pour 100 g ».
+    if (!item.grams || item.grams <= 0) return { ...item, source: "ai" }
+    const entry = matchTunisianFood100(item.name)
+    if (!entry) return { ...item, source: "ai" }
+    const m = macrosForGrams(entry, item.grams)
+    return {
+      ...item,
+      calories: Math.round(m.calories),
+      protein: Math.round(m.protein),
+      carbs: Math.round(m.carbs),
+      fat: Math.round(m.fat),
+      per100: entry.per100,
+      reference: entry.name,
+      source: "local",
+    }
+  })
+}
+
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash"
 
 /**
@@ -312,9 +346,11 @@ async function scanWithGemini(geminiKey: string, mediaType: string, base64: stri
     )
   }
 
-  const items = (Array.isArray(parsed.items) ? parsed.items : [])
-    .map(normalizeItem)
-    .filter((x): x is DetectedFood => x !== null)
+  const items = applyLocalReference(
+    (Array.isArray(parsed.items) ? parsed.items : [])
+      .map(normalizeItem)
+      .filter((x): x is DetectedFood => x !== null),
+  )
 
   if (items.length === 0) {
     // Pas de nourriture reconnue : on répond SANS faux aliments — juste le
@@ -459,9 +495,13 @@ export async function POST(request: Request) {
       tips?: string
     }
 
-    const items = (Array.isArray(parsed.items) ? parsed.items : [])
-      .map(normalizeItem)
-      .filter((x): x is DetectedFood => x !== null)
+    // Même priorité à la base locale que sur le chemin Gemini : dès qu'un
+    // aliment reconnu existe en 100 g, les macros viennent de la table.
+    const items = applyLocalReference(
+      (Array.isArray(parsed.items) ? parsed.items : [])
+        .map(normalizeItem)
+        .filter((x): x is DetectedFood => x !== null),
+    )
 
     if (items.length === 0) {
       return Response.json(

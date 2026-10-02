@@ -14,6 +14,12 @@ export type ScannedItem = {
   fat: number
   confidence: number
   detail: string
+  /** Valeurs de référence locales (pour 100 g) si l'aliment vient de la base 🇹🇳. */
+  per100?: { kcal: number; protein: number; carbs: number; fat: number }
+  /** "local" = chiffres issus de la base tunisienne, "ai" = estimation du modèle. */
+  source?: "local" | "ai"
+  /** Nom de l'entrée locale correspondante. */
+  reference?: string
 }
 
 export type ScanResult = {
@@ -165,15 +171,27 @@ export function itemBaseGrams(item: ScannedItem): number {
 }
 
 /**
- * Macros d'un item pour un grammage donné. Le scanner renvoie les macros pour
- * SON estimation de portion : si l'utilisateur corrige le poids (combien de
- * grammes il a vraiment mangé), on met les macros à l'échelle proportionnellement.
- * `quantity` = nombre de portions.
+ * Macros d'un item pour un grammage donné. `quantity` = nombre de portions.
+ *
+ * - Aliment reconnu dans la base locale (`per100`) : on repart TOUJOURS des
+ *   valeurs de référence pour 100 g × le poids, donc corriger les grammes
+ *   recalcule des chiffres exacts — sans dérive de l'estimation du modèle.
+ * - Sinon (estimation IA) : mise à l'échelle proportionnelle de la portion.
  */
 export function itemMacrosAt(item: ScannedItem, grams?: number, quantity = 1) {
   const base = itemBaseGrams(item)
   const g = grams && grams > 0 ? grams : base
-  const factor = (g / base) * (quantity > 0 ? quantity : 1)
+  const q = quantity > 0 ? quantity : 1
+  if (item.per100) {
+    const f = (g / 100) * q
+    return {
+      calories: item.per100.kcal * f,
+      protein: item.per100.protein * f,
+      carbs: item.per100.carbs * f,
+      fat: item.per100.fat * f,
+    }
+  }
+  const factor = (g / base) * q
   return {
     calories: item.calories * factor,
     protein: item.protein * factor,
